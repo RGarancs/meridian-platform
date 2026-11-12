@@ -9,8 +9,9 @@ Plan and module map: https://claude.ai/artifact/MrCqjPqpTbbhomFzQ8XPCY · Brand 
 |---|---|
 | Platform shell: module sidebar, search (Cmd+K), light and dark, white-label name and accent (Settings › Brand), activity log | Built |
 | **Sales (CRM)**: Today (what needs you, pipeline, win rate), Deals (board with drag to change stage, list), Companies, Contacts, a record panel with timeline, next step, stage change, GDPR export and delete-forever | Built, example data |
-| Other modules (People, Marketing, Work, Insights, Strategy, Academy, Studio, Ledger, Harness) | Listed with what each builds on; People is next |
-| Hosted database: `supabase/migrations/0001_sales.sql` (partners, tenants, memberships, row-level security per tenant, append-only audit log) | Written, not yet applied |
+| **People (HR)**: Overview (what needs you, who is away), Directory with profile and vacation balance, Leave (request, approve with team-clash warning, Latvian holidays excluded), Onboarding checklists, Hiring board (scores, reasons, hire starts onboarding, privacy clean-up), Reviews with weighted goals and bonus rule | Built, example data |
+| Other modules (Marketing, Work, Insights, Strategy, Academy, Studio, Ledger, Harness) | Listed with what each builds on; Marketing is next |
+| Hosted database: `supabase/migrations/0001_sales.sql`, `0002_people.sql` (partners, tenants, memberships, row-level security per tenant, append-only audit log) | Written, not yet applied |
 
 The demo keeps data in the browser (`LocalRepository`). Hosting swaps in a Supabase repository behind the same interface; the pages don't change.
 
@@ -36,5 +37,5 @@ npm run build    # also writes dist/meridian-demo.html, the whole app in one fil
 ## Next
 
 - Sales: email sync and drafting with approval, import from CSV, owners and permissions, support inbox.
-- People module v1: directory, onboarding checklists, leave, recruitment pipeline, reviews (HPT Index as the assessment).
+- People: HPT Index as the team assessment, competences and training, role-based access to reviews and candidates, Easter-based holidays.
 - Hosting: apply the migration to a Supabase project in Frankfurt, add sign-in, deploy on Vercel.

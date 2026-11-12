@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MODULES } from './platform/modules';
 import { LocalRepository } from './platform/store';
+import { clearJson } from './platform/jsonStore';
 import { RecordRef, search } from './crm/domain';
 import { seedCrm } from './crm/seed';
 import { useCrm } from './crm/useCrm';
 import { Companies, Contacts, Deals, Today } from './crm/pages';
 import { RecordPanel } from './crm/RecordPanel';
+import { Directory, Hiring, Leave, OnboardingPage, PeopleToday, Reviews, usePeople } from './people/pages';
+
+const PEOPLE_PAGES = [
+  { id: 'overview', label: 'Overview' }, { id: 'directory', label: 'Directory' }, { id: 'leave', label: 'Leave' },
+  { id: 'onboarding', label: 'Onboarding' }, { id: 'hiring', label: 'Hiring' }, { id: 'reviews', label: 'Reviews' },
+];
 
 type SalesPage = 'today' | 'deals' | 'companies' | 'contacts';
-type Route = { module: 'sales'; page: SalesPage } | { module: string; page?: undefined } | { module: 'brand' };
+type Route = { module: 'sales'; page: SalesPage } | { module: string; page?: string };
 
 const SALES_PAGES: { id: SalesPage; label: string }[] = [
   { id: 'today', label: 'Today' }, { id: 'deals', label: 'Deals' }, { id: 'companies', label: 'Companies' }, { id: 'contacts', label: 'Contacts' },
@@ -23,12 +30,14 @@ function parseHash(): Route {
   // Plain #name hashes (e.g. #sales-deals, #people, #brand) so links work inside an artifact too.
   const [module, page] = location.hash.replace(/^#\/?/, '').split(/[-/]/);
   if (!module || module === 'sales') return { module: 'sales', page: (SALES_PAGES.some((p) => p.id === page) ? page : 'today') as SalesPage };
+  if (module === 'people') return { module, page: PEOPLE_PAGES.some((p) => p.id === page) ? page : 'overview' };
   return { module };
 }
 
 export default function App() {
   const repo = useMemo(() => new LocalRepository('demo', seedCrm), []);
   const crm = useCrm(repo, 'You');
+  const hr = usePeople('You');
   const [route, setRoute] = useState<Route>(parseHash);
   const [openRec, setOpenRec] = useState<RecordRef | null>(null);
   const [brand, setBrand] = useState<Branding>(loadBrand);
@@ -50,7 +59,7 @@ export default function App() {
 
   const go = (hash: string) => { location.hash = hash.replace(/^\//, '').replace('/', '-'); };
   const mod = MODULES.find((m) => m.id === route.module);
-  const crumb = route.module === 'sales' ? `Sales › ${SALES_PAGES.find((p) => p.id === route.page)!.label}` : route.module === 'brand' ? 'Settings › Brand' : mod?.name ?? '';
+  const crumb = route.module === 'sales' ? `Sales › ${SALES_PAGES.find((p) => p.id === route.page)!.label}` : route.module === 'people' ? `People › ${PEOPLE_PAGES.find((p) => p.id === route.page)?.label}` : route.module === 'brand' ? 'Settings › Brand' : mod?.name ?? '';
 
   return (
     <div className="app">
@@ -60,8 +69,12 @@ export default function App() {
         {SALES_PAGES.map((p) => (
           <button key={p.id} className="nav" aria-current={route.module === 'sales' && route.page === p.id ? 'page' : undefined} onClick={() => go(`/sales/${p.id}`)}>{p.label}</button>
         ))}
+        <div className="side-label">People</div>
+        {PEOPLE_PAGES.map((p) => (
+          <button key={p.id} className="nav" aria-current={route.module === 'people' && route.page === p.id ? 'page' : undefined} onClick={() => go(`/people/${p.id}`)}>{p.label}</button>
+        ))}
         <div className="side-label">Modules</div>
-        {MODULES.filter((m) => m.id !== 'sales').map((m) => (
+        {MODULES.filter((m) => m.status !== 'live').map((m) => (
           <button key={m.id} className="nav" aria-current={route.module === m.id ? 'page' : undefined} onClick={() => go(`/${m.id}`)}>
             <span>{m.name}</span><span className={`pill ${m.status === 'next' ? 'accent' : ''}`}>{m.status === 'next' ? 'Next' : 'Planned'}</span>
           </button>
@@ -81,8 +94,14 @@ export default function App() {
           {route.module === 'sales' && route.page === 'deals' && <Deals crm={crm} onOpen={setOpenRec} />}
           {route.module === 'sales' && route.page === 'companies' && <Companies crm={crm} onOpen={setOpenRec} />}
           {route.module === 'sales' && route.page === 'contacts' && <Contacts crm={crm} onOpen={setOpenRec} />}
-          {route.module === 'brand' && <BrandSettings brand={brand} setBrand={setBrand} onReset={() => { repo.reset(); location.reload(); }} audit={repo.auditLog()} />}
-          {mod && mod.id !== 'sales' && (
+          {route.module === 'brand' && <BrandSettings brand={brand} setBrand={setBrand} onReset={() => { repo.reset(); clearJson('people'); location.reload(); }} audit={repo.auditLog()} />}
+          {route.module === 'people' && route.page === 'overview' && <PeopleToday hr={hr} go={(pg) => go(`/people/${pg}`)} />}
+          {route.module === 'people' && route.page === 'directory' && <Directory hr={hr} />}
+          {route.module === 'people' && route.page === 'leave' && <Leave hr={hr} />}
+          {route.module === 'people' && route.page === 'onboarding' && <OnboardingPage hr={hr} />}
+          {route.module === 'people' && route.page === 'hiring' && <Hiring hr={hr} />}
+          {route.module === 'people' && route.page === 'reviews' && <Reviews hr={hr} />}
+          {mod && mod.status !== 'live' && (
             <div className="page coming">
               <h1 className="headline">{mod.name}: {mod.oneLine.toLowerCase()}.</h1>
               <p>{mod.status === 'next' ? 'This module is being built next.' : 'This module is planned.'} It brings together work that already exists:</p>

@@ -14,8 +14,8 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   { id: 'sales', name: 'Sales', oneLine: 'CRM, follow-ups and support in one timeline', status: 'live', buildsOn: ['Meridian OS Pipeline', 'Meridian Growth pipeline'] },
-  { id: 'people', name: 'People', oneLine: 'Hiring, onboarding, leave, reviews and growth', status: 'next', buildsOn: ['HPT Index', 'vakances-lv salary data'] },
-  { id: 'marketing', name: 'Marketing', oneLine: 'From brand to campaign to results, with sources', status: 'planned', buildsOn: ['Meridian Marketing', 'Meridian OS', 'Meridian Motion', 'Meridian Growth'] },
+  { id: 'people', name: 'People', oneLine: 'Hiring, onboarding, leave, reviews and growth', status: 'live', buildsOn: ['HPT Index', 'vakances-lv salary data'] },
+  { id: 'marketing', name: 'Marketing', oneLine: 'From brand to campaign to results, with sources', status: 'next', buildsOn: ['Meridian Marketing', 'Meridian OS', 'Meridian Motion', 'Meridian Growth'] },
   { id: 'work', name: 'Work', oneLine: "Goals down to today's tasks, and the updates in between", status: 'planned', buildsOn: ['Cockpit goals'] },
   { id: 'insights', name: 'Insights', oneLine: 'Your numbers explained, with the decision they point to', status: 'planned', buildsOn: ['Mantinieks', 'datalab analytics'] },
   { id: 'strategy', name: 'Strategy', oneLine: 'Research, options and a team workbook', status: 'planned', buildsOn: ['Where AI belongs', 'Decision coach', 'Proving Ground'] },
