@@ -17,7 +17,7 @@ export class LocalRepository implements Repository {
 
   load(): CrmData {
     try {
-      const raw = localStorage.getItem(this.key('crm'));
+      const raw = localStorage.getItem(this.key('crm2'));
       if (raw) return { ...emptyCrm(), ...JSON.parse(raw) };
     } catch { /* storage blocked or corrupt: fall back to seed */ }
     const data = this.seed();
@@ -25,7 +25,7 @@ export class LocalRepository implements Repository {
     return data;
   }
   save(data: CrmData) {
-    try { localStorage.setItem(this.key('crm'), JSON.stringify(data)); } catch { /* private window */ }
+    try { localStorage.setItem(this.key('crm2'), JSON.stringify(data)); } catch { /* private window */ }
   }
   audit(line: string) {
     const log = this.auditLog();
@@ -36,7 +36,7 @@ export class LocalRepository implements Repository {
     try { return JSON.parse(localStorage.getItem(this.key('audit')) ?? '[]'); } catch { return []; }
   }
   reset() {
-    try { localStorage.removeItem(this.key('crm')); localStorage.removeItem(this.key('audit')); } catch { /* ignore */ }
+    try { localStorage.removeItem(this.key('crm2')); localStorage.removeItem(this.key('audit')); } catch { /* ignore */ }
   }
 }
 

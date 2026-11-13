@@ -15,8 +15,12 @@ export interface Company {
   size?: '1-9' | '10-49' | '50-249' | '250+';
   country?: string;
   ownerId?: Id;
+  props?: Record<string, PropValue>; // custom properties defined per tenant
   createdAt: ISODate;
 }
+
+export type PropValue = string | number | boolean;
+export interface PropertyDef { id: Id; entity: 'company' | 'contact'; label: string; type: 'text' | 'number' | 'select' | 'date' | 'yes_no'; options?: string[] }
 
 export interface Contact {
   id: Id;
@@ -30,6 +34,8 @@ export interface Contact {
   source: string; // where the contact came from: event, referral, website form, import...
   lawfulBasis: LawfulBasis;
   consentDate?: ISODate; // required when lawfulBasis is consent
+  unsubscribed?: boolean; // opted out of newsletters
+  props?: Record<string, PropValue>;
   createdAt: ISODate;
 }
 
@@ -96,15 +102,34 @@ export interface Task {
   companyId?: Id;
 }
 
+export type TicketStatus = 'open' | 'waiting' | 'solved';
+export type Priority = 'low' | 'normal' | 'high';
+export interface TicketMessage { at: ISODate; from: 'customer' | 'us'; text: string; by?: string }
+export interface Ticket {
+  id: Id; subject: string; contactId?: Id; companyId?: Id; channel: 'email' | 'chat' | 'phone';
+  status: TicketStatus; priority: Priority; topic?: string; createdAt: ISODate; firstReplyAt?: ISODate; solvedAt?: ISODate;
+  messages: TicketMessage[];
+}
+
+export interface SegmentRule { cluster?: string; health?: 'healthy' | 'watch' | 'at_risk'; customersOnly?: boolean; industry?: string; country?: string }
+export interface Campaign {
+  id: Id; name: string; segment: SegmentRule; subject: string; body: string;
+  status: 'draft' | 'approved' | 'sent'; approvedBy?: string; sentAt?: ISODate; recipients?: number; createdAt: ISODate;
+}
+
 export interface CrmData {
   companies: Company[];
   contacts: Contact[];
   deals: Deal[];
   activities: Activity[];
   tasks: Task[];
+  properties: PropertyDef[];
+  tickets: Ticket[];
+  campaigns: Campaign[];
+  dismissed: Id[]; // Autopilot suggestions the user set aside
 }
 
-export const emptyCrm = (): CrmData => ({ companies: [], contacts: [], deals: [], activities: [], tasks: [] });
+export const emptyCrm = (): CrmData => ({ companies: [], contacts: [], deals: [], activities: [], tasks: [], properties: [], tickets: [], campaigns: [], dismissed: [] });
 
 // ---------- validation ----------
 
@@ -268,6 +293,7 @@ export function exportContact(data: CrmData, contactId: Id) {
     deals: data.deals.filter((d) => d.contactId === contactId),
     activities: data.activities.filter((a) => a.contactId === contactId),
     tasks: data.tasks.filter((t) => t.contactId === contactId),
+    supportTickets: (data.tickets ?? []).filter((t) => t.contactId === contactId),
   };
 }
 
@@ -281,7 +307,8 @@ export function eraseContact(data: CrmData, contactId: Id, by: string, now: ISOD
   const removed = data.activities.filter((a) => a.contactId === contactId && !a.dealId).length;
   return {
     data: {
-      companies: data.companies,
+      ...data,
+      tickets: (data.tickets ?? []).filter((t) => t.contactId !== contactId),
       contacts: data.contacts.filter((c) => c.id !== contactId),
       deals: data.deals.map((d) => (d.contactId === contactId ? { ...d, contactId: undefined } : d)),
       activities: data.activities

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { ActivityKind, RecordRef, STAGES, STAGE_LABEL, Stage, eur, exportContact, tasksFor, timeline } from './domain';
 import { Crm } from './useCrm';
 import { BASIS_LABEL, CompanyForm, ContactForm, DealForm, LostDialog } from './forms';
-import { Avatar, Icon, Menu, Panel, Seg, fmtDay, todayIso, useToast } from '../platform/ui';
+import { Avatar, Disclose, Icon, Menu, Panel, Seg, fmtDay, todayIso, useToast } from '../platform/ui';
+import { HEALTH_LABEL, healthCheck } from './ai';
+import { PropFacts } from './props';
 
 const KIND_LABEL: Record<ActivityKind, string> = { note: 'Note', call: 'Call', email: 'Email', meeting: 'Meeting', stage_change: 'Stage', created: 'Created' };
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -83,12 +85,24 @@ export function RecordPanel({ crm, refr, onClose, onOpen }: { crm: Crm; refr: Re
         </>
       )}
 
+      {company && (() => { const h = healthCheck(data, company.id, todayIso()); return (
+        <div className="card flat tight">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="ring" style={{ ['--p' as string]: h.score }} data-v={h.score} />
+            <div className="grow"><div className="ink" style={{ fontWeight: 600 }}><span className={`health ${h.band}`}><i />{HEALTH_LABEL[h.band]}</span></div><div className="sub" data-tip="Worked out automatically from contact, deals, support tickets, tasks and the renewal date." tabIndex={0}>Customer health, checked automatically</div></div>
+          </div>
+          <Disclose title="Why">
+            <ul className="tl">{h.reasons.map((r) => <li key={r.text} className={r.impact > 0 ? 'stage_change' : ''}><div className="ink">{r.text}</div><div className="when">{r.impact > 0 ? `+${r.impact}` : r.impact} points</div></li>)}</ul>
+          </Disclose>
+        </div>
+      ); })()}
       {company && (
         <>
           <dl className="facts">
             <dt>Website</dt><dd>{company.domain ?? '—'}</dd>
             <dt>Size</dt><dd>{company.size ? `${company.size} people` : '—'}</dd>
             <dt>Country</dt><dd>{company.country ?? '—'}</dd>
+            <PropFacts defs={data.properties.filter((p) => p.entity === 'company')} values={company.props} />
           </dl>
           <div>
             <div className="section-title">People</div>
@@ -121,6 +135,8 @@ export function RecordPanel({ crm, refr, onClose, onOpen }: { crm: Crm; refr: Re
             <dt>Company</dt><dd>{contact.companyId ? link({ kind: 'company', id: contact.companyId }, companyOf(contact.companyId)?.name ?? '') : '—'}</dd>
             <dt>Source</dt><dd>{contact.source}</dd>
             <dt><span data-tip="The GDPR reason you may keep this person on file." tabIndex={0}>Lawful basis</span></dt><dd>{BASIS_LABEL[contact.lawfulBasis]}{contact.consentDate ? `, given ${fmtDay(contact.consentDate)}` : ''}</dd>
+            <dt>Newsletter</dt><dd>{contact.unsubscribed ? <span className="pill">Unsubscribed</span> : contact.email ? <>Subscribed <button className="link sub" onClick={() => toast(`${contact.firstName} unsubscribed`, crm.unsubscribe(contact.id))}>· Unsubscribe</button></> : <span className="muted">No email</span>}</dd>
+            <PropFacts defs={data.properties.filter((p) => p.entity === 'contact')} values={contact.props} />
           </dl>
         </>
       )}

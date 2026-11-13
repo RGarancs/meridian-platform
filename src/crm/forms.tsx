@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Company, Contact, Deal, LawfulBasis, STAGES, STAGE_LABEL, Stage, validateContact, validateDeal } from './domain';
+import { Company, Contact, Deal, LawfulBasis, PropValue, STAGES, STAGE_LABEL, Stage, validateContact, validateDeal } from './domain';
 import { Crm } from './useCrm';
 import { Field, Panel, useToast } from '../platform/ui';
+import { PropInputs } from './props';
+import { validateProps } from './ai';
 
 const SIZES = ['1-9', '10-49', '50-249', '250+'] as const;
 export const BASIS_LABEL: Record<LawfulBasis, string> = { consent: 'Consent', contract: 'Contract', legitimate_interest: 'Legitimate interest', legal_obligation: 'Legal obligation' };
@@ -11,11 +13,14 @@ export function CompanyForm({ crm, company, onClose }: { crm: Crm; company?: Com
   const toast = useToast();
   const [f, setF] = useState({ name: company?.name ?? '', domain: company?.domain ?? '', industry: company?.industry ?? '', size: company?.size ?? '', country: company?.country ?? '' });
   const [err, setErr] = useState('');
+  const [props, setProps] = useState<Record<string, PropValue>>(company?.props ?? {});
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.name.trim()) return setErr('Give the company a name.');
-    const v = { name: f.name.trim(), domain: f.domain || undefined, industry: f.industry || undefined, size: (f.size || undefined) as Company['size'], country: f.country || undefined };
+    const pe = validateProps(crm.data, 'company', props);
+    if (pe.length) return setErr(pe[0]);
+    const v = { name: f.name.trim(), domain: f.domain || undefined, industry: f.industry || undefined, size: (f.size || undefined) as Company['size'], country: f.country || undefined, props };
     if (company) { const undo = crm.updateCompany(company.id, v); toast(`Saved ${v.name}`, undo); }
     else { const r = crm.addCompany(v); toast(`Added ${v.name}`, r.undo); }
     onClose();
@@ -33,6 +38,7 @@ export function CompanyForm({ crm, company, onClose }: { crm: Crm; company?: Com
           <Field label="Size" id="co-size"><select id="co-size" value={f.size} onChange={set('size')}><option value="">Unknown</option>{SIZES.map((s) => <option key={s} value={s}>{s} people</option>)}</select></Field>
           <Field label="Country" id="co-country"><input id="co-country" value={f.country} onChange={set('country')} placeholder="LV" /></Field>
         </div>
+        <PropInputs defs={crm.data.properties.filter((p) => p.entity === 'company')} values={props} onChange={setProps} />
         <div className="toolbar"><button className="btn primary" type="submit">{company ? 'Save' : 'Add company'}</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
       </form>
     </Panel>
@@ -46,11 +52,12 @@ export function ContactForm({ crm, contact, onClose, companyId }: { crm: Crm; co
     companyId: contact?.companyId ?? companyId ?? '', source: contact?.source ?? '', lawfulBasis: contact?.lawfulBasis ?? ('legitimate_interest' as LawfulBasis), consentDate: contact?.consentDate?.slice(0, 10) ?? '',
   });
   const [errors, setErrors] = useState<string[]>([]);
+  const [props, setProps] = useState<Record<string, PropValue>>(contact?.props ?? {});
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const c = { ...f, email: f.email || undefined, phone: f.phone || undefined, role: f.role || undefined, companyId: f.companyId || undefined, consentDate: f.lawfulBasis === 'consent' ? f.consentDate || undefined : undefined };
-    const errs = validateContact(c);
+    const c = { ...f, props, email: f.email || undefined, phone: f.phone || undefined, role: f.role || undefined, companyId: f.companyId || undefined, consentDate: f.lawfulBasis === 'consent' ? f.consentDate || undefined : undefined };
+    const errs = [...validateContact(c), ...validateProps(crm.data, 'contact', props)];
     if (errs.length) return setErrors(errs);
     if (contact) toast(`Saved ${c.firstName} ${c.lastName}`, crm.updateContact(contact.id, c));
     else toast(`Added ${c.firstName} ${c.lastName}`, crm.addContact(c).undo);
@@ -77,6 +84,7 @@ export function ContactForm({ crm, contact, onClose, companyId }: { crm: Crm; co
           <Field label="Why we may keep them" id="ct-lb" tip={BASIS_TIP}><select id="ct-lb" value={f.lawfulBasis} onChange={set('lawfulBasis')}>{Object.entries(BASIS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
           {f.lawfulBasis === 'consent' && <Field label="Consent given on" id="ct-cd"><input id="ct-cd" type="date" value={f.consentDate} onChange={set('consentDate')} /></Field>}
         </div>
+        <PropInputs defs={crm.data.properties.filter((p) => p.entity === 'contact')} values={props} onChange={setProps} />
         <div className="toolbar"><button className="btn primary" type="submit">{contact ? 'Save' : 'Add contact'}</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
       </form>
     </Panel>

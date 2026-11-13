@@ -101,6 +101,14 @@ export function Menu({ items, label = 'More actions', className }: { items: Menu
   const btn = useRef<HTMLButtonElement>(null);
   const box = useRef<HTMLDivElement>(null);
   useEscape(() => setOpen(false), open);
+  // right-click on the row or tile that holds this ⋯ opens the same menu at the pointer
+  useEffect(() => {
+    const b = btn.current;
+    if (!b) return;
+    const on = (e: Event) => { const { x, y } = (e as CustomEvent<{ x: number; y: number }>).detail; setPos({ top: Math.min(y, window.innerHeight - 60 - items.length * 38), left: Math.min(x, window.innerWidth - 208) }); setOpen(true); };
+    b.addEventListener('ctxopen', on);
+    return () => b.removeEventListener('ctxopen', on);
+  }, [items.length]);
   useEffect(() => {
     if (!open) return;
     box.current?.querySelector('button')?.focus();
@@ -116,7 +124,7 @@ export function Menu({ items, label = 'More actions', className }: { items: Menu
   };
   return (
     <>
-      <button ref={btn} className={`btn sm icon ghost ${className ?? ''}`} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Icon name="more" /></button>
+      <button ref={btn} data-menu className={`btn sm icon ghost ${className ?? ''}`} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Icon name="more" /></button>
       {open && (
         <div ref={box} className="menu" role="menu" style={{ position: 'fixed', top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
@@ -217,3 +225,150 @@ export const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toL
 export const fmtDayYear = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 export const todayIso = () => new Date().toISOString().slice(0, 10);
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+// ---------- right-click menus ----------
+// Every row, tile and card that has a ⋯ menu also opens the same menu on right-click (and Shift+F10),
+// so the actions are there for people who expect them and invisible for those who don't.
+type CtxState = { x: number; y: number; items: MenuItem[]; title?: string } | null;
+const CtxCtx = createContext<(s: CtxState) => void>(() => {});
+
+export function ContextMenuProvider({ children }: { children: ReactNode }) {
+  const [st, setSt] = useState<CtxState>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // Any row, tile or card with a ⋯ menu answers right-click (and Shift+F10) with that same menu.
+  useEffect(() => {
+    const find = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      if (!el || el.closest('input, textarea, select, [contenteditable]')) return null;
+      const host = el.closest('tr, .tile, .row, .card-head, .panel-head') as HTMLElement | null;
+      return host?.querySelector('button[data-menu]') as HTMLButtonElement | null;
+    };
+    const on = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
+      const b = find(e.target);
+      if (!b) return;
+      e.preventDefault();
+      b.dispatchEvent(new CustomEvent('ctxopen', { detail: { x: e.clientX, y: e.clientY } }));
+    };
+    const key = (e: KeyboardEvent) => {
+      if (!((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') || e.defaultPrevented) return;
+      const b = find(document.activeElement);
+      if (!b) return;
+      e.preventDefault();
+      const r = (document.activeElement as HTMLElement).getBoundingClientRect();
+      b.dispatchEvent(new CustomEvent('ctxopen', { detail: { x: r.left + 24, y: r.bottom - 6 } }));
+    };
+    document.addEventListener('contextmenu', on);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('contextmenu', on); document.removeEventListener('keydown', key); };
+  }, []);
+  useEscape(() => setSt(null), !!st);
+  useEffect(() => {
+    if (!st) return;
+    box.current?.querySelector('button')?.focus();
+    const off = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setSt(null); };
+    const scroll = () => setSt(null);
+    document.addEventListener('mousedown', off);
+    window.addEventListener('scroll', scroll, true);
+    return () => { document.removeEventListener('mousedown', off); window.removeEventListener('scroll', scroll, true); };
+  }, [st]);
+  return (
+    <CtxCtx.Provider value={setSt}>
+      {children}
+      {st && (
+        <div ref={box} className="menu ctx" role="menu" aria-label={st.title ?? 'Actions'}
+          style={{ position: 'fixed', top: Math.min(st.y, window.innerHeight - 40 - st.items.length * 38), left: Math.min(st.x, window.innerWidth - 216) }}
+          onKeyDown={(e) => {
+            const bs = [...(box.current?.querySelectorAll('button') ?? [])];
+            const i = bs.indexOf(document.activeElement as HTMLButtonElement);
+            if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length]?.focus(); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length]?.focus(); }
+          }}>
+          {st.title && <div className="ctx-title">{st.title}</div>}
+          {st.items.map((it, i) => it === 'divider' ? <hr key={i} /> : (
+            <button key={it.label} role="menuitem" className={it.danger ? 'danger' : ''} onClick={() => { setSt(null); it.onClick(); }}>
+              {it.icon && <Icon name={it.icon} size={16} />}{it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </CtxCtx.Provider>
+  );
+}
+
+/** Spread on any element: right-click or Shift+F10 opens the given actions at the pointer. */
+export function useContextMenu() {
+  const open = useContext(CtxCtx);
+  return useCallback((items: MenuItem[], title?: string) => ({
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); open({ x: e.clientX, y: e.clientY, items, title }); },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') { e.preventDefault(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); open({ x: r.left + 24, y: r.bottom - 6, items, title }); }
+    },
+  }), [open]);
+}
+
+// ---------- page tabs (with an overflow dropdown) ----------
+export type Tab = { id: string; label: string; count?: number; icon?: string; tip?: string };
+export function Tabs({ items, value, onChange, max = 7, label }: { items: Tab[]; value: string; onChange: (id: string) => void; max?: number; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState({ top: 0, left: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+  useEscape(() => setOpen(false), open);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [open]);
+  const shown = items.slice(0, max);
+  const rest = items.slice(max);
+  const activeInRest = rest.find((t) => t.id === value);
+  const tab = (t: Tab) => (
+    <button key={t.id} role="tab" aria-selected={t.id === value} className="tab" onClick={() => onChange(t.id)} data-tip={t.tip}>
+      {t.label}{t.count ? <span className="count">{t.count}</span> : null}
+    </button>
+  );
+  return (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {shown.map(tab)}
+      {rest.length > 0 && (
+        <div ref={ref} className="tab-more">
+          <button className="tab" aria-selected={!!activeInRest} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 228)) }); setOpen(!open); }}>
+            {activeInRest ? activeInRest.label : 'More'}<Icon name="chevron" size={14} />
+          </button>
+          {open && (
+            <div className="menu" role="menu" style={{ position: 'fixed', top: at.top, left: at.left, zIndex: 60 }}>
+              {rest.map((t) => <button key={t.id} role="menuitem" onClick={() => { setOpen(false); onChange(t.id); }}>{t.label}{t.count ? <span className="count" style={{ marginLeft: 'auto' }}>{t.count}</span> : null}</button>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- progressive disclosure ----------
+/** Shows the first `n` items and a quiet "Show N more" for the rest. */
+export function ShowMore<T>({ items, n = 5, render, noun = 'more' }: { items: T[]; n?: number; render: (x: T, i: number) => ReactNode; noun?: string }) {
+  const [all, setAll] = useState(false);
+  return (
+    <>
+      {(all ? items : items.slice(0, n)).map(render)}
+      {items.length > n && <button className="show-more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show ${items.length - n} ${noun}`}</button>}
+    </>
+  );
+}
+
+/** A section that stays folded until asked for: details that most people never need. */
+export function Disclose({ title, children, defaultOpen = false }: { title: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="disclose">
+      <button className="disclose-head" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="chevron" size={14} className="chev" />{title}</button>
+      {open && <div className="disclose-body">{children}</div>}
+    </div>
+  );
+}
+
+/** A small keyboard hint, shown in tooltips and menus. */
+export function Kbd({ children }: { children: ReactNode }) { return <kbd className="kbd">{children}</kbd>; }

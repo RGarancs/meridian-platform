@@ -2,6 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './platform/theme.css';
 import App from './App';
-import { ToastProvider } from './platform/ui';
+import { ContextMenuProvider, ToastProvider } from './platform/ui';
 
-createRoot(document.getElementById('root')!).render(<StrictMode><ToastProvider><App /></ToastProvider></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><ToastProvider><ContextMenuProvider><App /></ContextMenuProvider></ToastProvider></StrictMode>);

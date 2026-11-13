@@ -4,6 +4,7 @@ import {
   parseContactsCsv, pipelineSummary, sourceReport, winRate,
 } from './domain';
 import { Crm } from './useCrm';
+import { InsightCards } from './ai-pages';
 import { BASIS_LABEL, CompanyForm, ContactForm, DealForm, LostDialog } from './forms';
 import { Avatar, Bar, Empty, Head, Icon, Menu, Panel, SearchInput, Seg, Stat, fmtDay, plural, todayIso, useToast } from '../platform/ui';
 
@@ -350,7 +351,9 @@ export function Reports({ crm }: { crm: Crm }) {
   const max = Math.max(1, ...summary.map((s) => s.value));
   return (
     <div className="page">
-      <Head eyebrow="Sales" title="Reports" lede="Where the pipeline stands, where wins come from and why deals are lost." />
+      <Head eyebrow="Sales" title="Four numbers that matter, each with what to do." lede="Every card follows 5B: a ballpark number, a benchmark, one short line, the breakdown and a bespoke next step. The detail is below." />
+      <InsightCards crm={crm} />
+      <div className="section-title" style={{ marginTop: 8 }}>Detail</div>
       <div className="grid">
         <div className="card s6">
           <div className="card-head"><h2>Pipeline by stage</h2></div>

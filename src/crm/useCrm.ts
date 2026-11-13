@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Activity, ActivityKind, Company, Contact, CrmData, Deal, Stage, Task, emptyCrm, eraseContact, moveDeal } from './domain';
+import { Activity, ActivityKind, Campaign, Company, Contact, CrmData, Deal, PropertyDef, Stage, Task, Ticket, TicketStatus, emptyCrm, eraseContact, moveDeal } from './domain';
 import { Repository, newId } from '../platform/store';
 
 /**
@@ -89,6 +89,59 @@ export function useCrm(repo: Repository, user: string) {
     deleteTask(id: string) {
       return commit({ ...data, tasks: data.tasks.filter((t) => t.id !== id) }, `deleted task ${id}`);
     },
+    // custom properties
+    addProperty(p: Omit<PropertyDef, 'id'>) {
+      const id = p.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || newId('pr');
+      return commit({ ...data, properties: [...data.properties.filter((x) => x.id !== id), { ...p, id }] }, `added property ${id}`);
+    },
+    deleteProperty(id: string) { return commit({ ...data, properties: data.properties.filter((p) => p.id !== id) }, `deleted property ${id}`); },
+
+    // customer service
+    addTicket(t: Omit<Ticket, 'id' | 'createdAt' | 'status'>) {
+      const ticket: Ticket = { ...t, id: newId('tq'), createdAt: now(), status: 'open' };
+      return { ticket, undo: commit({ ...data, tickets: [ticket, ...data.tickets] }, `opened ticket ${ticket.id}`) };
+    },
+    replyTicket(id: string, text: string, solve: boolean) {
+      const t = data.tickets.find((x) => x.id === id)!;
+      const at = now();
+      const reply: Activity = { id: newId('ac'), kind: 'email', text: `Support reply: ${t.subject}`, at, by: user, contactId: t.contactId, companyId: t.companyId };
+      return commit({
+        ...data,
+        tickets: data.tickets.map((x) => (x.id === id ? { ...x, messages: [...x.messages, { at, from: 'us', by: user, text }], firstReplyAt: x.firstReplyAt ?? at, status: solve ? 'solved' : 'waiting', solvedAt: solve ? at : x.solvedAt } : x)),
+        activities: [...data.activities, reply],
+      }, `replied to ticket ${id}`);
+    },
+    setTicket(id: string, patch: Partial<Pick<Ticket, 'status' | 'priority' | 'topic'>>) {
+      const extra = patch.status === 'solved' ? { solvedAt: now() } : {};
+      return commit({ ...data, tickets: data.tickets.map((x) => (x.id === id ? { ...x, ...patch, ...extra } : x)) }, `updated ticket ${id}${patch.status ? ` to ${patch.status as TicketStatus}` : ''}`);
+    },
+
+    // newsletters
+    /** Saves a draft; with approve, the same change also records who approved it (sending is a separate step). */
+    saveCampaign(c: Omit<Campaign, 'id' | 'createdAt' | 'status'> & { id?: string }, approve = false) {
+      const status: Campaign['status'] = approve ? 'approved' : 'draft';
+      const extra = approve ? { approvedBy: user } : {};
+      if (c.id) return { id: c.id, undo: commit({ ...data, campaigns: data.campaigns.map((x) => (x.id === c.id ? { ...x, ...c, status, ...extra } : x)) }, `${approve ? 'approved' : 'edited'} newsletter ${c.id}`) };
+      const camp: Campaign = { ...c, id: newId('cp'), createdAt: now(), status, ...extra };
+      return { id: camp.id, undo: commit({ ...data, campaigns: [camp, ...data.campaigns] }, `${approve ? 'approved' : 'drafted'} newsletter ${camp.id}`) };
+    },
+    approveCampaign(id: string) { return commit({ ...data, campaigns: data.campaigns.map((x) => (x.id === id ? { ...x, status: 'approved', approvedBy: user } : x)) }, `approved newsletter ${id}`); },
+    sendCampaign(id: string, contactIds: string[]) {
+      const at = now();
+      const c = data.campaigns.find((x) => x.id === id)!;
+      const acts: Activity[] = contactIds.map((cid) => ({ id: newId('ac'), kind: 'email', text: `Newsletter: ${c.subject}`, at, by: user, contactId: cid, companyId: data.contacts.find((x) => x.id === cid)?.companyId }));
+      return commit({ ...data, campaigns: data.campaigns.map((x) => (x.id === id ? { ...x, status: 'sent', sentAt: at, recipients: contactIds.length } : x)), activities: [...data.activities, ...acts] }, `sent newsletter ${id} to ${contactIds.length}`);
+    },
+    deleteCampaign(id: string) { return commit({ ...data, campaigns: data.campaigns.filter((x) => x.id !== id) }, `deleted newsletter ${id}`); },
+    unsubscribe(contactId: string) { return commit({ ...data, contacts: data.contacts.map((c) => (c.id === contactId ? { ...c, unsubscribed: true } : c)) }, `unsubscribed contact ${contactId}`); },
+
+    // autopilot
+    dismiss(id: string) { return commit({ ...data, dismissed: [...data.dismissed, id] }, `dismissed suggestion`); },
+    acceptTask(sid: string, t: Omit<Task, 'id' | 'done' | 'owner'>) {
+      const task: Task = { ...t, id: newId('tk'), done: false, owner: user };
+      return commit({ ...data, tasks: [...data.tasks, task], dismissed: [...data.dismissed, sid] }, `accepted suggestion: ${task.id}`);
+    },
+
     erase(contactId: string) {
       const r = eraseContact(data, contactId, user, now());
       repo.audit(r.log);
