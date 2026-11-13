@@ -1,401 +1,465 @@
 import { useMemo, useState } from 'react';
 import {
-  CANDIDATE_LABEL, CANDIDATE_STAGES, CandidateStage, LeaveKind, LeaveRequest, PeopleData, Person, ReviewGoal,
-  addDays, averageScore, bonusMultiplier, candidatesToDelete, directReports, leaveBalance, lvFixedHolidays, moveCandidate,
-  onboardingProgress, reviewScore, startOnboarding, teamClashes, tenureMonths, validateGoals, validateLeave, whoIsAway, workingDays,
+  LeaveKind, OrgNode, Person, activePeople, addDays, candidatesToDelete, compaRatio, directReports, docsToAcknowledge, enps, expiringSoon,
+  goalProgress, leaveBalance, lvFixedHolidays, onboardingProgress, orgTree, reviewScore, skillGaps, teamClashes, tenureMonths,
+  unusedVacationOnLeaving, validateLeave, whoIsAway, workingDays,
 } from './domain';
-import { loadJson, saveJson } from '../platform/jsonStore';
-import { seedPeople } from './seed';
+import { People } from './usePeople';
+import { KIND, OWNER, PersonSelect, money, nameOf, range } from './shared';
+import { Avatar, Bar, Empty, Field, Head, Icon, Menu, Panel, SearchInput, Seg, fmtDay, fmtDayYear, plural, todayIso, useToast } from '../platform/ui';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const KIND: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', unpaid: 'Unpaid', parental: 'Parental', study: 'Study' };
-const OWNER = { hr: 'HR', manager: 'Manager', it: 'IT', newcomer: 'Newcomer' } as const;
-const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const range = (a: string, b: string) => (a === b ? fmtDay(a) : `${fmtDay(a)} to ${fmtDay(b)}`);
-let seq = 0;
-const nid = (p: string) => `${p}_${Date.now().toString(36)}${(seq++).toString(36)}`;
-
-export function usePeople(user: string) {
-  const [data, setData] = useState<PeopleData>(() => loadJson('people', seedPeople));
-  return useMemo(() => {
-    const commit = (next: PeopleData) => { saveJson('people', next); setData(next); };
-    return {
-      data, user,
-      requestLeave(r: Omit<LeaveRequest, 'id' | 'status'>) { commit({ ...data, leave: [...data.leave, { ...r, id: nid('lv'), status: 'pending' }] }); },
-      decideLeave(id: string, status: 'approved' | 'declined') { commit({ ...data, leave: data.leave.map((r) => (r.id === id ? { ...r, status, decidedBy: user } : r)) }); },
-      toggleTask(onbId: string, taskId: string) {
-        commit({ ...data, onboarding: data.onboarding.map((o) => (o.id === onbId ? { ...o, tasks: o.tasks.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t)) } : o)) });
-      },
-      moveCandidate(id: string, to: CandidateStage, reason?: string) {
-        commit({ ...data, candidates: data.candidates.map((c) => (c.id === id ? moveCandidate(c, to, reason) : c)) });
-      },
-      scoreCandidate(id: string, score: number) { commit({ ...data, candidates: data.candidates.map((c) => (c.id === id ? { ...c, scores: [...c.scores, score] } : c)) }); },
-      deleteCandidates(ids: string[]) { commit({ ...data, candidates: data.candidates.filter((c) => !ids.includes(c.id)) }); },
-      hire(candidateId: string) {
-        const c = data.candidates.find((x) => x.id === candidateId)!;
-        const op = data.openings.find((o) => o.id === c.openingId)!;
-        const start = addDays(today(), 30);
-        const person: Person = { id: nid('p'), name: c.name, email: c.email ?? '', title: op.title, team: op.team, managerId: op.hiringManagerId, startDate: start, location: 'Riga', leaveAllowance: 20 };
-        commit({
-          ...data,
-          people: [...data.people, person],
-          candidates: data.candidates.map((x) => (x.id === candidateId ? { ...x, stage: 'hired' } : x)),
-          openings: data.openings.map((o) => (o.id === op.id ? { ...o, open: false } : o)),
-          onboarding: [...data.onboarding, startOnboarding(person.id, start, nid('ob'))],
-        });
-      },
-      scoreGoal(reviewId: string, i: number, score: number) {
-        commit({ ...data, reviews: data.reviews.map((r) => (r.id === reviewId ? { ...r, goals: r.goals.map((g, j) => (j === i ? { ...g, score } : g)) } : r)) });
-      },
-      setGoals(reviewId: string, goals: ReviewGoal[]) { commit({ ...data, reviews: data.reviews.map((r) => (r.id === reviewId ? { ...r, goals } : r)) }); },
-      finishManager(reviewId: string) { commit({ ...data, reviews: data.reviews.map((r) => (r.id === reviewId ? { ...r, managerDone: true } : r)) }); },
-    };
-  }, [data, user]);
-}
-export type People = ReturnType<typeof usePeople>;
-const nameOf = (d: PeopleData, id?: string) => d.people.find((p) => p.id === id)?.name ?? '—';
+type Go = (page: string) => void;
 
 // ---------------- Overview ----------------
 
-export function PeopleToday({ hr, go }: { hr: People; go: (page: string) => void }) {
+export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPerson: (id: string) => void }) {
   const { data } = hr;
-  const t = today();
+  const t = todayIso();
+  const active = activePeople(data, t);
   const away = whoIsAway(data, t);
   const pending = data.leave.filter((r) => r.status === 'pending');
-  const onb = data.onboarding.map((o) => ({ o, p: onboardingProgress(o, t) })).filter((x) => x.p.done < x.p.total);
-  const reviewsOpen = data.reviews.filter((r) => !r.managerDone).length;
-  const purge = candidatesToDelete(data, t);
-  const asks = pending.length + onb.reduce((s, x) => s + x.p.overdue, 0) + (purge.length ? 1 : 0);
+  const unsigned = data.documents.filter((d) => d.requiresAck).reduce((s, d) => s + active.filter((p) => (!d.personId || d.personId === p.id) && !d.acks.some((a) => a.personId === p.id && a.version === d.version)).length, 0);
+  const overdueTasks = [...data.onboarding, ...data.offboarding].reduce((s, o) => s + onboardingProgress(o, t).overdue, 0);
+  const reviewsWaiting = data.reviews.filter((r) => !r.managerDone).length;
+  const toDelete = candidatesToDelete(data, t).length;
+  const expiring = expiringSoon(data, t, 45);
+  const starting = data.people.filter((p) => p.startDate > t && p.startDate <= addDays(t, 45));
+  const leaving = data.people.filter((p) => p.lastDay && p.lastDay >= t && p.lastDay <= addDays(t, 60));
+  const pulse = [...data.pulses].sort((a, b) => b.period.localeCompare(a.period))[0];
+  const score = pulse ? enps(pulse.scores) : null;
+  const asks = [
+    pending.length && { n: pending.length, text: plural(pending.length, 'time-off request') + ' to decide', page: 'timeoff', icon: 'calendar' },
+    unsigned && { n: unsigned, text: `${plural(unsigned, 'signature')} missing on documents`, page: 'documents', icon: 'doc' },
+    overdueTasks && { n: overdueTasks, text: `${plural(overdueTasks, 'joiner or leaver task')} overdue`, page: 'moves', icon: 'door' },
+    reviewsWaiting && { n: reviewsWaiting, text: `${plural(reviewsWaiting, 'review')} waiting for a manager`, page: 'reviews', icon: 'star' },
+    expiring.length && { n: expiring.length, text: `${plural(expiring.length, 'certificate or course', 'certificates or courses')} expiring`, page: 'skills', icon: 'skill' },
+    toDelete && { n: toDelete, text: `${plural(toDelete, 'candidate')} past the GDPR keep date`, page: 'hiring', icon: 'hire' },
+  ].filter(Boolean) as { n: number; text: string; page: string; icon: string }[];
+
   return (
     <div className="page">
-      <h1 className="headline">{asks === 0 ? 'Nothing needs you in People today.' : `${asks} thing${asks > 1 ? 's' : ''} need${asks > 1 ? '' : 's'} you in People today.`}</h1>
-      <div className="grid">
-        <Stat label="People" value={String(data.people.filter((p) => p.startDate <= t).length)} sub={`${data.people.filter((p) => p.startDate > t).length} starting soon`} />
-        <Stat label="Away today" value={String(away.length)} sub={away.map((a) => a.person.name.split(' ')[0]).join(', ') || 'Everyone in'} />
-        <Stat label="Open roles" value={String(data.openings.filter((o) => o.open).length)} sub={`${data.candidates.filter((c) => !['hired', 'rejected'].includes(c.stage)).length} candidates in process`} />
-        <Stat label="Reviews to finish" value={String(reviewsOpen)} sub={data.reviews[0]?.cycle ?? ''} />
-      </div>
-      <div className="grid">
-        <div className="card span-8">
-          <h2>Needs you</h2>
-          <div className="table-wrap"><table className="list"><tbody>
-            {pending.map((r) => (
-              <tr key={r.id} className="row" onClick={() => go('leave')}>
-                <td>{nameOf(data, r.personId)}<div className="sub">{KIND[r.kind]}, {range(r.from, r.to)}</div></td>
-                <td><span className="pill accent">Leave to approve</span></td>
-                <td className="num">{workingDays(r.from, r.to, lvFixedHolidays(Number(r.from.slice(0, 4))))} days</td>
-              </tr>
-            ))}
-            {onb.filter((x) => x.p.overdue).map(({ o, p }) => (
-              <tr key={o.id} className="row" onClick={() => go('onboarding')}>
-                <td>{nameOf(data, o.personId)}<div className="sub">Starts {fmtDay(o.startDate)}. Next: {p.nextTask?.text}</div></td>
-                <td><span className="pill neg">{p.overdue} onboarding task{p.overdue > 1 ? 's' : ''} overdue</span></td><td />
-              </tr>
-            ))}
-            {purge.length > 0 && (
-              <tr className="row" onClick={() => go('hiring')}>
-                <td>{purge.length} candidate record{purge.length > 1 ? 's' : ''} past the keep-until date<div className="sub">Delete to stay within your privacy notice</div></td>
-                <td><span className="pill neg">Privacy</span></td><td />
-              </tr>
-            )}
-          </tbody></table></div>
-          {asks === 0 && <div className="empty">All clear.</div>}
-        </div>
-        <div className="card span-4">
-          <h2>Away in the next two weeks</h2>
-          {data.leave.filter((r) => r.status === 'approved' && r.to >= t && r.from <= addDays(t, 14)).map((r) => (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-              <span style={{ color: 'var(--ink)' }}>{nameOf(data, r.personId)}</span><span className="sub">{KIND[r.kind]} · {range(r.from, r.to)}</span>
-            </div>
-          ))}
+      <Head eyebrow="People" title={asks.length === 0 ? 'Nothing needs you today.' : `${plural(asks.length, 'thing')} need${asks.length === 1 ? 's' : ''} you today.`} />
+      <div className="hero">
+        <div><div className="sub">Team</div><div className="big">{active.length}</div><div className="sub" style={{ marginTop: 6 }}>{plural(away.length, 'person', 'people')} away today</div></div>
+        <div>
+          <div className="sub" data-tip="Employee Net Promoter Score: % who would recommend working here (9–10) minus % who would not (0–6). Hidden below 5 answers." tabIndex={0}>eNPS</div>
+          <div className="big" style={{ color: 'var(--accent)' }}>{score === null ? '—' : score > 0 ? `+${score}` : score}</div>
+          <div className="sub" style={{ marginTop: 6 }}>{pulse ? `${pulse.period.replace('-', ' ')} · ${plural(pulse.scores.length, 'answer')}` : 'No pulse yet'}</div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return <div className="card span-3"><div className="stat-label">{label}</div><div className="stat">{value}</div><div className="stat-sub">{sub}</div></div>;
-}
-
-// ---------------- Directory ----------------
-
-export function Directory({ hr }: { hr: People }) {
-  const { data } = hr;
-  const [q, setQ] = useState('');
-  const [team, setTeam] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
-  const t = today();
-  const teams = [...new Set(data.people.map((p) => p.team))].sort();
-  const rows = data.people.filter((p) => (!team || p.team === team) && `${p.name} ${p.title}`.toLowerCase().includes(q.toLowerCase()));
-  const person = data.people.find((p) => p.id === open);
-  return (
-    <div className="page">
-      <div className="toolbar">
-        <input className="btn" style={{ textAlign: 'left', width: 240 }} placeholder="Find a person or role" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a person" id="dir-q" />
-        <select className="btn" value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team" id="dir-team"><option value="">All teams</option>{teams.map((x) => <option key={x}>{x}</option>)}</select>
-        <div className="spacer" /><span className="sub">{rows.length} people</span>
-      </div>
-      <div className="card"><div className="table-wrap"><table className="list">
-        <thead><tr><th>Name</th><th>Role</th><th>Team</th><th>Manager</th><th>Location</th><th className="num">Vacation left</th></tr></thead>
-        <tbody>{rows.map((p) => (
-          <tr key={p.id} className="row" onClick={() => setOpen(p.id)}>
-            <td>{p.name}{p.startDate > t && <> <span className="pill accent">Starts {fmtDay(p.startDate)}</span></>}<div className="sub">{p.email}</div></td>
-            <td>{p.title}</td><td>{p.team}</td><td>{nameOf(data, p.managerId)}</td><td>{p.location}</td>
-            <td className="num">{leaveBalance(data, p.id, Number(t.slice(0, 4)), t).left} days</td>
-          </tr>
-        ))}</tbody>
-      </table></div></div>
-      {person && <PersonPanel hr={hr} person={person} onClose={() => setOpen(null)} />}
-    </div>
-  );
-}
-
-function PersonPanel({ hr, person, onClose }: { hr: People; person: Person; onClose: () => void }) {
-  const { data } = hr;
-  const t = today();
-  const b = leaveBalance(data, person.id, Number(t.slice(0, 4)), t);
-  const review = data.reviews.find((r) => r.personId === person.id);
-  return (
-    <>
-      <div className="panel-backdrop" onClick={onClose} />
-      <aside className="panel" role="dialog" aria-label={person.name}>
-        <div className="panel-head"><div><div className="sub">{person.title} · {person.team}</div><h2 style={{ fontSize: 20 }}>{person.name}</h2></div><button className="btn ghost small" onClick={onClose}>Close</button></div>
-        <div className="panel-body">
-          <dl className="facts">
-            <dt>Email</dt><dd>{person.email}</dd>
-            <dt>Manager</dt><dd>{nameOf(data, person.managerId)}</dd>
-            <dt>Reports</dt><dd>{directReports(data, person.id).map((p) => p.name).join(', ') || '—'}</dd>
-            <dt>Started</dt><dd>{person.startDate}{person.startDate <= t ? ` (${tenureMonths(person, t)} months)` : ' (not yet)'}</dd>
-            <dt>Location</dt><dd>{person.location}</dd>
-          </dl>
-          <div>
-            <h3 style={{ fontSize: 13, marginBottom: 8 }}>Vacation this year</h3>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {[['Allowance', b.allowance], ['Taken', b.taken], ['Booked', b.booked + b.pending], ['Left', b.left]].map(([l, v]) => (
-                <div key={l as string} className="card" style={{ padding: 10 }}><div className="stat-label">{l}</div><div style={{ font: '24px var(--font-serif)', color: 'var(--ink)' }}>{v}</div></div>
+      <div className="grid">
+        <div className="card tight s7">
+          <div className="card-head"><h2>Needs you</h2></div>
+          {asks.length === 0 ? <Empty title="All clear" text="No requests, signatures or reviews are waiting." /> : (
+            <div className="rows" style={{ marginTop: 8 }}>
+              {asks.map((a) => (
+                <div key={a.page} className="row" onClick={() => go(a.page)} role="link" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && go(a.page)}>
+                  <span className="avatar sm co" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Icon name={a.icon} size={14} /></span>
+                  <div className="grow"><div className="t">{a.text}</div></div>
+                  <Icon name="arrow" size={16} />
+                </div>
               ))}
             </div>
-          </div>
-          {review && <div><h3 style={{ fontSize: 13, marginBottom: 6 }}>Review {review.cycle}</h3><div>{reviewScore(review) ?? 'Not scored yet'}{reviewScore(review) !== null && <span className="sub"> of 5 · bonus {Math.round(bonusMultiplier(reviewScore(review)) * 100)}% of target</span>}</div></div>}
+          )}
         </div>
-      </aside>
-    </>
-  );
-}
-
-// ---------------- Leave ----------------
-
-export function Leave({ hr }: { hr: People }) {
-  const { data } = hr;
-  const t = today();
-  const [f, setF] = useState({ personId: data.people[2]?.id ?? '', kind: 'vacation' as LeaveKind, from: addDays(t, 7), to: addDays(t, 8), note: '' });
-  const [errors, setErrors] = useState<string[]>([]);
-  const [done, setDone] = useState('');
-  const pending = data.leave.filter((r) => r.status === 'pending');
-  const days = workingDays(f.from, f.to, lvFixedHolidays(Number(f.from.slice(0, 4))));
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const r = { personId: f.personId, kind: f.kind, from: f.from, to: f.to, note: f.note || undefined };
-    const errs = validateLeave(data, r, t);
-    setErrors(errs);
-    if (errs.length) return;
-    hr.requestLeave(r);
-    setDone(`Sent to ${nameOf(data, data.people.find((p) => p.id === f.personId)?.managerId)} for approval.`);
-  };
-  return (
-    <div className="page">
-      <div className="grid">
-        <div className="card span-6">
-          <h2>Leave waiting for a decision</h2>
-          {pending.length === 0 ? <div className="empty">Nothing waiting.</div> : pending.map((r) => {
-            const clashes = teamClashes(data, r);
-            return (
-              <div key={r.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b style={{ color: 'var(--ink)', fontWeight: 600 }}>{nameOf(data, r.personId)}</b><span className="sub">{KIND[r.kind]} · {range(r.from, r.to)} · {workingDays(r.from, r.to, lvFixedHolidays(Number(r.from.slice(0, 4))))} days</span></div>
-                {r.note && <div className="sub">“{r.note}”</div>}
-                {r.kind === 'vacation' && <div className="sub">{leaveBalance(data, r.personId, Number(r.from.slice(0, 4)), t).left} days left this year, including this request</div>}
-                {clashes.length > 0 && <div><span className="pill neg">Also away: {clashes.map((p) => p.name).join(', ')}</span></div>}
-                <div className="toolbar"><button className="btn small primary" onClick={() => hr.decideLeave(r.id, 'approved')}>Approve</button><button className="btn small" onClick={() => hr.decideLeave(r.id, 'declined')}>Decline</button></div>
-              </div>
-            );
-          })}
-        </div>
-        <form className="card span-6 form" onSubmit={submit}>
-          <h2>Request leave</h2>
-          {errors.length > 0 && <ul className="errors">{errors.map((x) => <li key={x}>{x}</li>)}</ul>}
-          {done && !errors.length && <div className="pill pos" style={{ alignSelf: 'flex-start' }}>{done}</div>}
-          <div className="row2">
-            <div className="field"><label htmlFor="lv-p">Who</label><select id="lv-p" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>{data.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-            <div className="field"><label htmlFor="lv-k">Kind</label><select id="lv-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as LeaveKind })}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-          </div>
-          <div className="row2">
-            <div className="field"><label htmlFor="lv-f">First day</label><input id="lv-f" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></div>
-            <div className="field"><label htmlFor="lv-t">Last day</label><input id="lv-t" type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></div>
-          </div>
-          <div className="field"><label htmlFor="lv-n">Note (optional)</label><input id="lv-n" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
-          <div className="toolbar"><button className="btn primary" type="submit">Send request</button><span className="sub">{days} working day{days === 1 ? '' : 's'}, public holidays excluded</span></div>
-        </form>
-      </div>
-      <div className="card">
-        <h2>All leave</h2>
-        <div className="table-wrap"><table className="list">
-          <thead><tr><th>Who</th><th>Kind</th><th>Dates</th><th className="num">Days</th><th>Status</th></tr></thead>
-          <tbody>{[...data.leave].sort((a, b) => b.from.localeCompare(a.from)).map((r) => (
-            <tr key={r.id}><td>{nameOf(data, r.personId)}</td><td>{KIND[r.kind]}</td><td>{range(r.from, r.to)}</td>
-              <td className="num">{workingDays(r.from, r.to, lvFixedHolidays(Number(r.from.slice(0, 4))))}</td>
-              <td><span className={`pill ${r.status === 'approved' ? 'pos' : r.status === 'declined' ? 'neg' : 'accent'}`}>{r.status === 'pending' ? 'Waiting' : r.status === 'approved' ? 'Approved' : 'Declined'}</span>{r.decidedBy && <span className="sub"> by {r.decidedBy}</span>}</td></tr>
-          ))}</tbody>
-        </table></div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------- Onboarding ----------------
-
-export function OnboardingPage({ hr }: { hr: People }) {
-  const { data } = hr;
-  const t = today();
-  if (data.onboarding.length === 0) return <div className="page"><div className="empty">Nobody is onboarding. Hiring a candidate starts a checklist here.</div></div>;
-  return (
-    <div className="page">
-      {data.onboarding.map((o) => {
-        const p = onboardingProgress(o, t);
-        const person = data.people.find((x) => x.id === o.personId);
-        return (
-          <div key={o.id} className="card">
-            <div className="toolbar" style={{ marginBottom: 10 }}>
-              <h2 style={{ margin: 0 }}>{person?.name}</h2><span className="sub">{person?.title} · starts {fmtDay(o.startDate)}</span>
-              <div className="spacer" /><span className="pill">{p.done} of {p.total} done</span>{p.overdue > 0 && <span className="pill neg">{p.overdue} overdue</span>}
+        <div className="card tight s5">
+          <div className="card-head"><h2>Away today</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('timeoff')}>Calendar <Icon name="arrow" size={14} /></button></div>
+          {away.length === 0 ? <Empty title="Everyone is in" /> : (
+            <div className="rows" style={{ marginTop: 8 }}>
+              {away.map(({ person, request }) => (
+                <div key={request.id} className="row" onClick={() => onPerson(person.id)}>
+                  <Avatar name={person.name} size="sm" />
+                  <div className="grow"><div className="t">{person.name}</div><div className="sub">Back {fmtDay(addDays(request.to, 1))}</div></div>
+                  <span className={`pill ${request.kind === 'sick' ? 'neg' : 'accent'}`}>{KIND[request.kind]}</span>
+                </div>
+              ))}
             </div>
-            <div className="table-wrap"><table className="list"><tbody>
-              {o.tasks.map((task) => {
-                const due = addDays(o.startDate, task.dueDay);
-                const late = !task.done && due < t;
-                return (
-                  <tr key={task.id}>
-                    <td style={{ width: 36 }}><input type="checkbox" id={`t-${task.id}`} checked={task.done} onChange={() => hr.toggleTask(o.id, task.id)} /></td>
-                    <td><label htmlFor={`t-${task.id}`} style={{ textDecoration: task.done ? 'line-through' : 'none', color: task.done ? 'var(--muted)' : 'var(--ink)', cursor: 'pointer' }}>{task.text}</label></td>
-                    <td className="sub">{OWNER[task.owner]}</td>
-                    <td className="num"><span className={late ? 'pill neg' : 'sub'}>{task.dueDay === 0 ? 'First day' : task.dueDay < 0 ? `${-task.dueDay} days before` : `Day ${task.dueDay}`} · {fmtDay(due)}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody></table></div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------------- Hiring ----------------
-
-export function Hiring({ hr }: { hr: People }) {
-  const { data } = hr;
-  const t = today();
-  const [opening, setOpening] = useState(data.openings[0]?.id ?? '');
-  const [reject, setReject] = useState<{ id: string; reason: string } | null>(null);
-  const [error, setError] = useState('');
-  const purge = candidatesToDelete(data, t);
-  const op = data.openings.find((o) => o.id === opening);
-  const cs = data.candidates.filter((c) => c.openingId === opening);
-  const move = (id: string, to: CandidateStage) => {
-    setError('');
-    if (to === 'rejected') return setReject({ id, reason: '' });
-    if (to === 'hired') return hr.hire(id);
-    try { hr.moveCandidate(id, to); } catch (e) { setError((e as Error).message); }
-  };
-  return (
-    <div className="page">
-      <div className="toolbar">
-        <div className="seg" role="group" aria-label="Opening">{data.openings.map((o) => <button key={o.id} aria-pressed={o.id === opening} onClick={() => setOpening(o.id)}>{o.title}{!o.open && ' (filled)'}</button>)}</div>
-        {op?.salaryFrom && <span className="sub">€{op.salaryFrom.toLocaleString('en-GB')} to €{op.salaryTo?.toLocaleString('en-GB')} gross a month · hiring manager {nameOf(data, op.hiringManagerId)}</span>}
+          )}
+        </div>
       </div>
-      {purge.length > 0 && (
-        <div className="card toolbar"><span className="pill neg">Privacy</span><span>{purge.length} rejected candidate record{purge.length > 1 ? 's are' : ' is'} past the keep-until date in your privacy notice.</span><div className="spacer" /><button className="btn small danger" onClick={() => hr.deleteCandidates(purge.map((c) => c.id))}>Delete {purge.length}</button></div>
-      )}
-      {error && <ul className="errors"><li>{error}</li></ul>}
-      {reject && (
-        <form className="card note-box" onSubmit={(e) => { e.preventDefault(); if (reject.reason.trim()) { hr.moveCandidate(reject.id, 'rejected', reject.reason.trim()); setReject(null); } }}>
-          <input className="btn" id="rej" style={{ textAlign: 'left' }} autoFocus placeholder="Why not further? (kept for the candidate's feedback)" value={reject.reason} onChange={(e) => setReject({ ...reject, reason: e.target.value })} />
-          <button className="btn primary" type="submit">Reject</button><button className="btn ghost" type="button" onClick={() => setReject(null)}>Cancel</button>
-        </form>
-      )}
-      <div className="board">
-        {CANDIDATE_STAGES.map((s) => (
-          <div key={s} className="col">
-            <div className="col-head"><b>{CANDIDATE_LABEL[s]}</b><span className="sub">{cs.filter((c) => c.stage === s).length}</span></div>
-            {cs.filter((c) => c.stage === s).map((c) => {
-              const avg = averageScore(c);
-              const i = CANDIDATE_STAGES.indexOf(s);
+      <div className="grid">
+        <div className="card tight s6">
+          <div className="card-head"><h2>Joining and leaving</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('moves')}>Checklists <Icon name="arrow" size={14} /></button></div>
+          {starting.length + leaving.length === 0 ? <Empty title="No one joining or leaving soon" /> : (
+            <div className="rows" style={{ marginTop: 8 }}>
+              {starting.map((p) => (
+                <div key={p.id} className="row" onClick={() => onPerson(p.id)}>
+                  <Avatar name={p.name} size="sm" /><div className="grow"><div className="t">{p.name}</div><div className="sub">{p.title} · {p.team}</div></div>
+                  <span className="pill pos">Starts {fmtDay(p.startDate)}</span>
+                </div>
+              ))}
+              {leaving.map((p) => (
+                <div key={p.id} className="row" onClick={() => onPerson(p.id)}>
+                  <Avatar name={p.name} size="sm" /><div className="grow"><div className="t">{p.name}</div><div className="sub">{p.title} · {p.team}</div></div>
+                  <span className="pill warn">Last day {fmtDay(p.lastDay!)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="card s6">
+          <div className="card-head"><h2>Company goals</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('goals')}>All goals <Icon name="arrow" size={14} /></button></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {data.goals.filter((g) => g.level === 'company').map((g) => {
+              const p = goalProgress(data, g.id);
               return (
-                <div key={c.id} className="deal" style={{ cursor: 'default' }}>
-                  <div className="deal-title">{c.name}</div>
-                  <div className="deal-meta"><span>{c.source}</span><span>{avg === null ? 'No score' : `${avg.toFixed(1)} / 5`}</span></div>
-                  {c.rejectReason && <div className="sub" style={{ marginTop: 4 }}>{c.rejectReason}</div>}
-                  {s !== 'hired' && s !== 'rejected' && (
-                    <div className="toolbar" style={{ marginTop: 8, gap: 6 }}>
-                      {s === 'interview' && <select className="btn small" aria-label="Add score" value="" onChange={(e) => hr.scoreCandidate(c.id, Number(e.target.value))}><option value="">Score</option>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select>}
-                      <button className="btn small primary" onClick={() => move(c.id, CANDIDATE_STAGES[i + 1])}>{s === 'offer' ? 'Hire' : 'Next'}</button>
-                      <button className="btn small ghost" onClick={() => move(c.id, 'rejected')}>Reject</button>
-                    </div>
-                  )}
+                <div key={g.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 6 }}><span className="ink">{g.title}</span><b className="ink num">{p}%</b></div>
+                  <Bar value={p} />
                 </div>
               );
             })}
           </div>
-        ))}
+        </div>
       </div>
-      <p className="sub">Hiring a candidate adds them to People, closes the role and starts their onboarding checklist.</p>
     </div>
   );
 }
 
-// ---------------- Reviews ----------------
+// ---------------- Directory ----------------
 
-export function Reviews({ hr }: { hr: People }) {
+export function Directory({ hr, onPerson }: { hr: People; onPerson: (id: string) => void }) {
   const { data } = hr;
-  const [open, setOpen] = useState<string | null>(data.reviews.find((r) => !r.managerDone)?.id ?? null);
+  const t = todayIso();
+  const [q, setQ] = useState('');
+  const [view, setView] = useState<'list' | 'org'>('list');
+  const [team, setTeam] = useState('all');
+  const [adding, setAdding] = useState(false);
+  const teams = [...new Set(data.people.map((p) => p.team))].sort();
+  const shown = data.people.filter((p) => (team === 'all' || p.team === team) && (!q || `${p.name} ${p.title} ${p.team} ${p.location}`.toLowerCase().includes(q.toLowerCase())));
+  const away = new Set(whoIsAway(data, t).map((a) => a.person.id));
+  const status = (p: Person) => (p.startDate > t ? <span className="pill pos">Starts {fmtDay(p.startDate)}</span> : p.lastDay && p.lastDay < t ? <span className="pill">Left</span> : p.lastDay ? <span className="pill warn">Leaving {fmtDay(p.lastDay)}</span> : away.has(p.id) ? <span className="pill accent">Away</span> : null);
+
+  const Node = ({ n }: { n: OrgNode }) => (
+    <div>
+      <div className="org-node" onClick={() => onPerson(n.person.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onPerson(n.person.id)} style={{ cursor: 'pointer' }}>
+        <Avatar name={n.person.name} size="sm" /><div><div className="ink">{n.person.name}</div><div className="sub">{n.person.title}</div></div>
+        {n.reports.length > 0 && <span className="pill">{n.reports.length}</span>}
+      </div>
+      {n.reports.length > 0 && <div className="org-kids">{n.reports.map((r) => <Node key={r.person.id} n={r} />)}</div>}
+    </div>
+  );
+
   return (
     <div className="page">
-      <div className="card"><div className="table-wrap"><table className="list">
-        <thead><tr><th>Person</th><th>Cycle</th><th>Self review</th><th>Manager review</th><th className="num">Score</th><th className="num">Bonus of target</th></tr></thead>
-        <tbody>{data.reviews.map((r) => {
-          const s = reviewScore(r);
-          return (
-            <tr key={r.id} className="row" onClick={() => setOpen(r.id)} aria-selected={open === r.id}>
-              <td>{nameOf(data, r.personId)}</td><td>{r.cycle}</td>
-              <td><span className={`pill ${r.selfDone ? 'pos' : ''}`}>{r.selfDone ? 'Done' : 'Waiting'}</span></td>
-              <td><span className={`pill ${r.managerDone ? 'pos' : 'accent'}`}>{r.managerDone ? 'Done' : 'To do'}</span></td>
-              <td className="num">{s ?? '—'}</td><td className="num">{s === null ? '—' : `${Math.round(bonusMultiplier(s) * 100)}%`}</td>
-            </tr>
-          );
-        })}</tbody>
-      </table></div></div>
-      {open && <ReviewEditor key={open} hr={hr} id={open} />}
-      <p className="sub">Bonus rule: below 3 pays nothing, 3 pays 50% of target, 4 pays 100%, 5 pays 150%, in straight lines between. Change it per company.</p>
+      <Head eyebrow="People" title={`${plural(activePeople(data, t).length, 'person', 'people')} in ${plural(teams.length, 'team')}.`}>
+        <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Add person</button>
+      </Head>
+      <div className="toolbar">
+        <SearchInput id="dir-q" value={q} onChange={setQ} placeholder="Find by name, role, team or city" />
+        <select className="input" style={{ width: 'auto' }} value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team"><option value="all">All teams</option>{teams.map((x) => <option key={x}>{x}</option>)}</select>
+        <div className="spacer" />
+        <Seg label="View" value={view} onChange={setView} options={[{ id: 'list', label: 'List' }, { id: 'org', label: 'Org chart' }]} />
+      </div>
+      {view === 'org' ? (
+        <div className="card"><div className="org">{orgTree(data, t).map((n) => <Node key={n.person.id} n={n} />)}</div></div>
+      ) : (
+        <div className="card tight">
+          {shown.length === 0 ? <Empty title="No one matches" text="Try another name or team." /> : (
+            <div style={{ overflowX: 'auto' }}><table className="list click">
+              <thead><tr><th>Name</th><th>Role</th><th>Team</th><th>Manager</th><th>Started</th><th /></tr></thead>
+              <tbody>{shown.map((p) => (
+                <tr key={p.id} onClick={() => onPerson(p.id)}>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Avatar name={p.name} size="sm" /><div><div className="ink">{p.name}</div><div className="sub">{p.location}</div></div></div></td>
+                  <td>{p.title}</td><td>{p.team}</td><td className="muted">{p.managerId ? nameOf(data, p.managerId) : '—'}</td>
+                  <td className="muted">{fmtDayYear(p.startDate)}</td><td className="num">{status(p)}</td>
+                </tr>
+              ))}</tbody>
+            </table></div>
+          )}
+        </div>
+      )}
+      {adding && <PersonForm hr={hr} onClose={() => setAdding(false)} />}
     </div>
   );
 }
 
-function ReviewEditor({ hr, id }: { hr: People; id: string }) {
-  const r = hr.data.reviews.find((x) => x.id === id)!;
-  const errs = validateGoals(r.goals);
-  const s = reviewScore(r);
+export function PersonForm({ hr, person, onClose }: { hr: People; person?: Person; onClose: () => void }) {
+  const toast = useToast();
+  const { data } = hr;
+  const [f, setF] = useState({
+    name: person?.name ?? '', email: person?.email ?? '', title: person?.title ?? '', team: person?.team ?? '', managerId: person?.managerId ?? '',
+    startDate: person?.startDate ?? addDays(todayIso(), 14), location: person?.location ?? 'Riga', leaveAllowance: String(person?.leaveAllowance ?? 20),
+    salary: person?.salary ? String(person.salary) : '', bonusTarget: person?.bonusTarget ? String(Math.round(person.bonusTarget * 100)) : '',
+  });
+  const [err, setErr] = useState<string[]>([]);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = [!f.name.trim() && 'Add a name.', !f.title.trim() && 'Add a role.', !f.team.trim() && 'Add a team.', Number(f.leaveAllowance) < 20 && 'Latvian law needs at least 20 working days of paid leave.'].filter(Boolean) as string[];
+    if (errs.length) return setErr(errs);
+    const v = { name: f.name.trim(), email: f.email.trim(), title: f.title.trim(), team: f.team.trim(), managerId: f.managerId || undefined, startDate: f.startDate, location: f.location, leaveAllowance: Number(f.leaveAllowance), salary: f.salary ? Number(f.salary) : undefined, bonusTarget: f.bonusTarget ? Number(f.bonusTarget) / 100 : undefined };
+    if (person) toast(`Saved ${v.name}`, hr.updatePerson(person.id, v));
+    else { const r = hr.addPerson(v); toast(`Added ${v.name}${v.startDate > todayIso() ? ' and started their onboarding checklist' : ''}`, r.undo); }
+    onClose();
+  };
   return (
-    <div className="card form">
-      <div className="toolbar"><h2 style={{ margin: 0 }}>{nameOf(hr.data, r.personId)}, {r.cycle}</h2><div className="spacer" />{s !== null && <span className="pill accent">{s} of 5 · bonus {Math.round(bonusMultiplier(s) * 100)}%</span>}</div>
-      <div className="table-wrap"><table className="list">
-        <thead><tr><th>Goal</th><th className="num">Weight</th><th>Score (1 to 5)</th></tr></thead>
-        <tbody>{r.goals.map((g, i) => (
-          <tr key={i}><td>{g.text}</td><td className="num">{g.weight}%</td>
-            <td><div className="seg" role="group" aria-label={`Score for ${g.text}`}>{[1, 2, 3, 4, 5].map((n) => <button key={n} aria-pressed={g.score === n} onClick={() => hr.scoreGoal(r.id, i, n)} disabled={r.managerDone}>{n}</button>)}</div></td></tr>
-        ))}</tbody>
-      </table></div>
-      {errs.length > 0 && <ul className="errors">{errs.map((e) => <li key={e}>{e}</li>)}</ul>}
-      {!r.managerDone && <div className="toolbar"><button className="btn primary" disabled={s === null || errs.length > 0} onClick={() => hr.finishManager(r.id)}>Finish manager review</button>{s === null && <span className="sub">Score every goal first.</span>}</div>}
+    <Panel title={person ? `Edit ${person.name}` : 'Add a person'} onClose={onClose}>
+      <form className="form" onSubmit={submit}>
+        {err.length > 0 && <ul className="errors">{err.map((x) => <li key={x}>{x}</li>)}</ul>}
+        <div className="row2"><Field label="Name" id="pf-n"><input id="pf-n" autoFocus value={f.name} onChange={set('name')} /></Field><Field label="Work email" id="pf-e"><input id="pf-e" type="email" value={f.email} onChange={set('email')} /></Field></div>
+        <div className="row2"><Field label="Role" id="pf-t"><input id="pf-t" value={f.title} onChange={set('title')} list="pf-titles" /></Field><Field label="Team" id="pf-tm"><input id="pf-tm" value={f.team} onChange={set('team')} list="pf-teams" /></Field></div>
+        <datalist id="pf-titles">{[...new Set(data.people.map((p) => p.title))].map((x) => <option key={x} value={x} />)}</datalist>
+        <datalist id="pf-teams">{[...new Set(data.people.map((p) => p.team))].map((x) => <option key={x} value={x} />)}</datalist>
+        <div className="row2"><Field label="Manager" id="pf-m"><PersonSelect id="pf-m" people={data.people.filter((p) => p.id !== person?.id)} value={f.managerId} onChange={(v) => setF({ ...f, managerId: v })} none="No manager" /></Field><Field label="Start date" id="pf-s"><input id="pf-s" type="date" value={f.startDate} onChange={set('startDate')} /></Field></div>
+        <div className="row2"><Field label="Location" id="pf-l"><input id="pf-l" value={f.location} onChange={set('location')} /></Field><Field label="Paid leave a year" id="pf-a" tip="Working days. Latvia's minimum is 4 weeks, which is 20 working days."><input id="pf-a" type="number" min="20" value={f.leaveAllowance} onChange={set('leaveAllowance')} /></Field></div>
+        <div className="row2"><Field label="Monthly salary, gross (€)" id="pf-sa" tip="Only HR and the line manager see pay."><input id="pf-sa" type="number" min="0" value={f.salary} onChange={set('salary')} /></Field><Field label="Bonus target (% of year's pay)" id="pf-b" tip="Paid in full when the review score is 4 of 5."><input id="pf-b" type="number" min="0" max="100" value={f.bonusTarget} onChange={set('bonusTarget')} /></Field></div>
+        <div className="toolbar"><button className="btn primary" type="submit">{person ? 'Save' : 'Add person'}</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
+      </form>
+    </Panel>
+  );
+}
+
+const LEVEL = ['None', 'Learning', 'Can do', 'Expert', 'Teaches'];
+
+export function PersonPanel({ hr, id, onClose, onPerson, go }: { hr: People; id: string; onClose: () => void; onPerson: (id: string) => void; go: Go }) {
+  const toast = useToast();
+  const { data } = hr;
+  const t = todayIso();
+  const p = data.people.find((x) => x.id === id);
+  const [editing, setEditing] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [timeOff, setTimeOff] = useState(false);
+  const [lastDay, setLastDay] = useState(addDays(t, 30));
+  if (!p) return null;
+  const year = Number(t.slice(0, 4));
+  const bal = leaveBalance(data, p.id, year, t);
+  const reports = directReports(data, p.id);
+  const goals = data.goals.filter((g) => g.ownerId === p.id);
+  const toSign = docsToAcknowledge(data, p.id);
+  const gaps = skillGaps(data, p.id);
+  const review = data.reviews.filter((r) => r.personId === p.id).slice(-1)[0];
+  const feedback = data.feedback.filter((f) => f.aboutId === p.id).slice(-3).reverse();
+  const cr = compaRatio(data, p);
+  const months = tenureMonths(p, t);
+
+  return (
+    <Panel title={p.name} eyebrow={`${p.title} · ${p.team}`} lead={<Avatar name={p.name} size="lg" />} onClose={onClose}
+      actions={<Menu items={[
+        { label: 'Edit', icon: 'edit', onClick: () => setEditing(true) },
+        { label: 'Book time off', icon: 'calendar', onClick: () => setTimeOff(true) },
+        'divider',
+        { label: p.lastDay ? 'Change last day' : 'Start leaving', icon: 'door', onClick: () => setLeaving(true), danger: !p.lastDay },
+      ]} />}>
+      <div className="hero" style={{ gap: 28 }}>
+        <div><div className="sub" data-tip="Paid vacation days left this year after taken, booked and pending days." tabIndex={0}>Vacation left</div><div className="big" style={{ fontSize: 40 }}>{bal.left}</div><div className="sub">of {bal.allowance} days</div></div>
+        <div><div className="sub">With us</div><div className="big" style={{ fontSize: 40 }}>{months < 0 ? 'New' : months >= 12 ? `${Math.floor(months / 12)}y ${months % 12}m` : `${months}m`}</div><div className="sub">since {fmtDayYear(p.startDate)}</div></div>
+      </div>
+      {leaving && (
+        <div className="card flat tight">
+          <form className="inline-form" onSubmit={(e) => { e.preventDefault(); toast(`${p.name} leaves on ${fmtDay(lastDay)}. Leaving checklist started.`, hr.startLeaving(p.id, lastDay)); setLeaving(false); }}>
+            <label htmlFor="pp-ld" className="sub">Last day</label><input id="pp-ld" className="input" type="date" value={lastDay} onChange={(e) => setLastDay(e.target.value)} />
+            <button className="btn primary sm" type="submit">Start leaving</button><button className="btn ghost sm" type="button" onClick={() => setLeaving(false)}>Cancel</button>
+          </form>
+          <p className="sub" style={{ margin: '8px 0 0' }}>Vacation owed on that day: <b className="ink">{unusedVacationOnLeaving(data, p.id, lastDay)} days</b>, paid with the final salary.</p>
+        </div>
+      )}
+      <dl className="facts">
+        <dt>Manager</dt><dd>{p.managerId ? <button className="link" onClick={() => onPerson(p.managerId!)}>{nameOf(data, p.managerId)}</button> : '—'}</dd>
+        <dt>Email</dt><dd>{p.email || '—'}</dd>
+        <dt>Location</dt><dd>{p.location}</dd>
+        {p.salary !== undefined && <><dt><span data-tip="Only HR and the line manager see pay." tabIndex={0}>Salary</span></dt><dd>{money(p.salary)} a month{cr !== null && <span className="sub"> · <span data-tip="Salary against the middle of the role's pay band. 1.00 is the middle." tabIndex={0}>compa-ratio {cr.toFixed(2)}</span></span>}</dd></>}
+        {p.lastDay && <><dt>Last day</dt><dd>{fmtDayYear(p.lastDay)}</dd></>}
+      </dl>
+      {reports.length > 0 && (<div><div className="section-title">Team ({reports.length})</div><div className="rows">{reports.map((r) => <div key={r.id} className="row" onClick={() => onPerson(r.id)}><Avatar name={r.name} size="sm" /><div className="grow"><div className="t">{r.name}</div><div className="sub">{r.title}</div></div></div>)}</div></div>)}
+      {toSign.length > 0 && (
+        <div><div className="section-title">Waiting for signature</div><div className="rows">{toSign.map((d) => (
+          <div key={d.id} className="row" style={{ cursor: 'default' }}><Icon name="doc" /><div className="grow"><div className="t">{d.title}</div><div className="sub">Version {d.version}</div></div><button className="btn sm" onClick={() => toast(`${p.name} signed ${d.title}`, hr.acknowledge(d.id, p.id))}>Mark signed</button></div>
+        ))}</div></div>
+      )}
+      {goals.length > 0 && (
+        <div><div className="section-title">Goals</div><div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{goals.map((g) => (
+          <div key={g.id} role="link" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => { onClose(); go('goals'); }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 6 }}><span className="ink">{g.title}</span><b className="num ink">{goalProgress(data, g.id)}%</b></div>
+            <Bar value={goalProgress(data, g.id)} tone={g.status === 'off_track' ? 'neg' : g.status === 'at_risk' ? 'warn' : ''} />
+          </div>
+        ))}</div></div>
+      )}
+      {review && (<div><div className="section-title">Review · {review.cycle}</div><div className="rows"><div className="row" onClick={() => { onClose(); go('reviews'); }}><Icon name="star" /><div className="grow"><div className="t">{review.managerDone ? `Score ${reviewScore(review) ?? '—'} of 5` : review.selfDone ? 'Waiting for the manager' : 'Waiting for the self-review'}</div><div className="sub">{plural(review.goals.length, 'goal')}</div></div><Icon name="arrow" size={16} /></div></div></div>)}
+      {gaps.length > 0 && (<div><div className="section-title">Skills to grow for the role</div><div className="rows">{gaps.map((g) => <div key={g.skill.id} className="row" style={{ cursor: 'default' }}><div className="grow"><div className="t">{g.skill.name}</div><div className="sub">Has {LEVEL[g.have]}, role needs {LEVEL[g.need]}</div></div><span className="pill warn">Gap {g.gap}</span></div>)}</div></div>)}
+      {feedback.length > 0 && (<div><div className="section-title">Recent feedback</div><ul className="tl">{feedback.map((f) => <li key={f.id} className={f.kind === 'praise' ? 'stage_change' : ''}><div className="ink">{f.text}</div><div className="when">{f.kind === 'praise' ? 'Praise' : 'To grow'} · {f.from} · {fmtDay(f.at)}{f.private ? ' · private' : ''}</div></li>)}</ul></div>)}
+      {editing && <PersonForm hr={hr} person={p} onClose={() => setEditing(false)} />}
+      {timeOff && <LeaveForm hr={hr} personId={p.id} onClose={() => setTimeOff(false)} />}
+    </Panel>
+  );
+}
+
+// ---------------- Time off ----------------
+
+export function LeaveForm({ hr, personId, onClose }: { hr: People; personId?: string; onClose: () => void }) {
+  const toast = useToast();
+  const { data } = hr;
+  const t = todayIso();
+  const [f, setF] = useState({ personId: personId ?? data.people[0]?.id ?? '', kind: 'vacation' as LeaveKind, from: addDays(t, 7), to: addDays(t, 11), note: '' });
+  const errs = validateLeave(data, { personId: f.personId, kind: f.kind, from: f.from, to: f.to, note: f.note || undefined }, t);
+  const days = f.from && f.to && f.to >= f.from ? workingDays(f.from, f.to, lvFixedHolidays(Number(f.from.slice(0, 4)))) : 0;
+  const clashes = f.from && f.to ? teamClashes(data, { id: '_', personId: f.personId, kind: f.kind, from: f.from, to: f.to, status: 'pending' }) : [];
+  const bal = f.personId ? leaveBalance(data, f.personId, Number(t.slice(0, 4)), t) : null;
+  const [tried, setTried] = useState(false);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault(); setTried(true);
+    if (errs.length) return;
+    toast(`Asked for ${plural(days, 'day')} off for ${nameOf(data, f.personId)}`, hr.requestLeave({ personId: f.personId, kind: f.kind, from: f.from, to: f.to, note: f.note || undefined }));
+    onClose();
+  };
+  return (
+    <Panel title="Book time off" onClose={onClose}>
+      <form className="form" onSubmit={submit}>
+        {tried && errs.length > 0 && <ul className="errors">{errs.map((x) => <li key={x}>{x}</li>)}</ul>}
+        <div className="row2">
+          <Field label="Who" id="lf-p"><PersonSelect id="lf-p" people={activePeople(data, t)} value={f.personId} onChange={(v) => setF({ ...f, personId: v })} /></Field>
+          <Field label="Kind" id="lf-k"><select id="lf-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as LeaveKind })}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+        </div>
+        <div className="row2">
+          <Field label="First day" id="lf-f"><input id="lf-f" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: e.target.value > f.to ? e.target.value : f.to })} /></Field>
+          <Field label="Last day" id="lf-t"><input id="lf-t" type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} /></Field>
+        </div>
+        <Field label="Note (optional)" id="lf-n"><input id="lf-n" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+        <div className="card flat tight" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <div><div className="sub" data-tip="Monday to Friday, without Latvian public holidays." tabIndex={0}>Working days</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{days}</div></div>
+          {f.kind === 'vacation' && bal && <div><div className="sub">Left after this</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{bal.left - days}</div></div>}
+          {clashes.length > 0 && <div className="grow"><div className="sub">Also away from {data.people.find((x) => x.id === f.personId)?.team}</div><div className="ink">{clashes.map((c) => c.name).join(', ')}</div></div>}
+        </div>
+        <div className="toolbar"><button className="btn primary" type="submit">Send request</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
+      </form>
+    </Panel>
+  );
+}
+
+export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) => void }) {
+  const toast = useToast();
+  const { data } = hr;
+  const t = todayIso();
+  const [booking, setBooking] = useState(false);
+  const [start, setStart] = useState(() => { const d = new Date(`${t}T00:00:00Z`); const wd = (d.getUTCDay() + 6) % 7; return addDays(t, -wd); });
+  const days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(start, i)), [start]);
+  const pending = data.leave.filter((r) => r.status === 'pending').sort((a, b) => a.from.localeCompare(b.from));
+  const people = activePeople(data, t).concat(data.people.filter((p) => p.startDate > t));
+  const year = Number(t.slice(0, 4));
+  const holidays = new Set(lvFixedHolidays(year).concat(lvFixedHolidays(year + 1)));
+  const cell = (pid: string, d: string) => data.leave.find((r) => r.personId === pid && r.status !== 'declined' && r.from <= d && d <= r.to);
+
+  return (
+    <div className="page">
+      <Head eyebrow="People" title={pending.length ? `${plural(pending.length, 'request')} wait${pending.length === 1 ? 's' : ''} for you.` : 'No requests to decide.'}>
+        <button className="btn primary" onClick={() => setBooking(true)}><Icon name="plus" size={16} />Book time off</button>
+      </Head>
+      {pending.length > 0 && (
+        <div className="card tight">
+          <div className="rows">{pending.map((r) => {
+            const p = data.people.find((x) => x.id === r.personId)!;
+            const clash = teamClashes(data, r);
+            const n = workingDays(r.from, r.to, lvFixedHolidays(Number(r.from.slice(0, 4))));
+            const b = r.kind === 'vacation' ? leaveBalance(data, p.id, Number(r.from.slice(0, 4)), t) : null;
+            return (
+              <div key={r.id} className="row" style={{ cursor: 'default', flexWrap: 'wrap' }}>
+                <Avatar name={p.name} size="sm" />
+                <div className="grow" style={{ minWidth: 200 }}>
+                  <div className="t"><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button> · {KIND[r.kind]} · {range(r.from, r.to)}</div>
+                  <div className="sub">{plural(n, 'working day')}{b ? ` · ${b.left + b.pending - n} left after` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                </div>
+                {clash.length > 0 && <span className="pill warn" data-tip={`Also away: ${clash.map((c) => c.name).join(', ')}`} tabIndex={0}>{plural(clash.length, 'clash', 'clashes')}</span>}
+                <button className="btn sm ghost" onClick={() => toast(`Declined ${p.name}'s request`, hr.decideLeave(r.id, 'declined'))}>Decline</button>
+                <button className="btn sm primary" onClick={() => toast(`Approved ${p.name}'s ${KIND[r.kind].toLowerCase()}`, hr.decideLeave(r.id, 'approved'))}><Icon name="check" size={14} />Approve</button>
+              </div>
+            );
+          })}</div>
+        </div>
+      )}
+      <div className="card">
+        <div className="card-head">
+          <h2>{new Date(`${start}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h2>
+          <div className="spacer" />
+          <span className="sub hide-phone" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span><i className="dot" style={{ background: 'var(--accent)' }} /> Vacation</span><span><i className="dot" style={{ background: 'var(--neg)' }} /> Sick</span><span><i className="dot" style={{ background: 'var(--warn)' }} /> Other</span><span><i className="dot" style={{ border: '1.5px dashed var(--accent)' }} /> Waiting</span>
+          </span>
+          <button className="btn sm icon ghost" aria-label="Earlier" onClick={() => setStart(addDays(start, -14))}><Icon name="chevron" size={16} className="rot90" /></button>
+          <button className="btn sm ghost" onClick={() => { const d = new Date(`${t}T00:00:00Z`); setStart(addDays(t, -((d.getUTCDay() + 6) % 7))); }}>Today</button>
+          <button className="btn sm icon ghost" aria-label="Later" onClick={() => setStart(addDays(start, 14))}><Icon name="chevron" size={16} className="rot-90" /></button>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <div className="cal" style={{ ['--days' as string]: days.length }}>
+            <div className="who sub">Person</div>
+            {days.map((d) => { const wd = new Date(`${d}T00:00:00Z`).getUTCDay(); return <div key={d} className={`d ${wd === 0 || wd === 6 || holidays.has(d) ? 'we' : ''} ${d === t ? 'today' : ''}`} title={holidays.has(d) ? 'Public holiday' : undefined}>{Number(d.slice(8))}</div>; })}
+            {people.map((p) => (
+              <FragmentRow key={p.id}>
+                <div className="who"><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button></div>
+                {days.map((d) => {
+                  const r = cell(p.id, d); const wd = new Date(`${d}T00:00:00Z`).getUTCDay(); const off = wd === 0 || wd === 6 || holidays.has(d);
+                  return <div key={d} className={`cell ${off ? 'we' : ''} ${r && !off ? `${r.kind} ${r.status}` : ''}`} title={r && !off ? `${p.name}: ${KIND[r.kind]}${r.status === 'pending' ? ' (waiting)' : ''}` : undefined}>{r && !off && <i />}</div>;
+                })}
+              </FragmentRow>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="card tight">
+        <div className="card-head"><h2>Vacation balances {year}</h2><div className="spacer" /><span className="sub" data-tip="Taken: days already past. Booked: approved future days. Waiting: requests not yet decided." tabIndex={0}>How we count</span></div>
+        <div style={{ overflowX: 'auto' }}><table className="list click">
+          <thead><tr><th>Person</th><th className="num">Allowance</th><th className="num">Taken</th><th className="num">Booked</th><th className="num">Waiting</th><th className="num">Left</th><th style={{ width: 160 }} /></tr></thead>
+          <tbody>{activePeople(data, t).map((p) => { const b = leaveBalance(data, p.id, year, t); return (
+            <tr key={p.id} onClick={() => onPerson(p.id)}>
+              <td className="ink">{p.name}</td><td className="num">{b.allowance}</td><td className="num">{b.taken}</td><td className="num">{b.booked}</td><td className="num">{b.pending}</td>
+              <td className="num"><b className="ink">{b.left}</b></td><td><Bar value={((b.taken + b.booked) / b.allowance) * 100} tone={b.left > b.allowance * 0.6 && Number(t.slice(5, 7)) >= 10 ? 'warn' : ''} /></td>
+            </tr>
+          ); })}</tbody>
+        </table></div>
+        <p className="sub" style={{ margin: '10px 4px 0' }}>Amber bar: more than 60% of the year's vacation still unused late in the year.</p>
+      </div>
+      {booking && <LeaveForm hr={hr} onClose={() => setBooking(false)} />}
+    </div>
+  );
+}
+
+function FragmentRow({ children }: { children: React.ReactNode }) { return <>{children}</>; }
+
+// ---------------- Joiners and leavers ----------------
+
+export function Moves({ hr, onPerson }: { hr: People; onPerson: (id: string) => void }) {
+  const toast = useToast();
+  const { data } = hr;
+  const t = todayIso();
+  const [owner, setOwner] = useState<'all' | keyof typeof OWNER>('all');
+  const lists = [
+    ...data.onboarding.map((o) => ({ o, kind: 'onboarding' as const })),
+    ...data.offboarding.map((o) => ({ o, kind: 'offboarding' as const })),
+  ].filter(({ o }) => onboardingProgress(o, t).done < o.tasks.length || o.startDate >= addDays(t, -14));
+  return (
+    <div className="page">
+      <Head eyebrow="People" title={lists.length ? `${plural(lists.length, 'checklist')} in progress.` : 'No one joining or leaving.'} lede="Each step has an owner and a day relative to the start or last day. Add a person with a future start date and their checklist starts by itself." />
+      <div className="toolbar"><Seg label="Owner" value={owner} onChange={setOwner} options={[{ id: 'all', label: 'Everyone' }, { id: 'hr', label: 'HR' }, { id: 'manager', label: 'Manager' }, { id: 'it', label: 'IT' }, { id: 'newcomer', label: 'Newcomer' }]} /></div>
+      {lists.length === 0 && <div className="card"><Empty title="Nothing in progress" text="Start a leaving checklist from a person's ⋯ menu." /></div>}
+      <div className="grid">
+        {lists.map(({ o, kind }) => {
+          const p = data.people.find((x) => x.id === o.personId);
+          if (!p) return null;
+          const pr = onboardingProgress(o, t);
+          const owed = kind === 'offboarding' ? unusedVacationOnLeaving(data, p.id, o.startDate) : null;
+          return (
+            <div key={o.id} className="card s6">
+              <div className="card-head">
+                <Avatar name={p.name} />
+                <div className="grow"><h2 style={{ fontSize: 16 }}><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button></h2><div className="sub">{kind === 'onboarding' ? `Starts ${fmtDay(o.startDate)}` : `Last day ${fmtDay(o.startDate)}`} · {p.title}</div></div>
+                <div className="ring" style={{ ['--p' as string]: Math.round((pr.done / pr.total) * 100) }} data-v={`${pr.done}/${pr.total}`} />
+              </div>
+              {owed !== null && <p className="sub" style={{ margin: '0 0 8px' }}>Unused vacation to pay out: <b className="ink">{owed} days</b></p>}
+              <div className="rows">
+                {o.tasks.filter((x) => owner === 'all' || x.owner === owner).map((task) => {
+                  const due = addDays(o.startDate, task.dueDay);
+                  const late = !task.done && due < t;
+                  return (
+                    <label key={task.id} className="row" style={{ cursor: 'pointer' }}>
+                      <input type="checkbox" checked={task.done} onChange={() => toast(task.done ? 'Reopened' : 'Done', hr.toggleTask(kind, o.id, task.id))} />
+                      <div className="grow"><div className="t" style={task.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{task.text}</div><div className="sub">{OWNER[task.owner]} · {fmtDay(due)}</div></div>
+                      {late && <span className="pill neg">Late</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

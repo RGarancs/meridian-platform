@@ -85,14 +85,26 @@ export interface Activity {
   dealId?: Id;
 }
 
+export interface Task {
+  id: Id;
+  title: string;
+  due: ISODate;
+  done: boolean;
+  owner: string;
+  dealId?: Id;
+  contactId?: Id;
+  companyId?: Id;
+}
+
 export interface CrmData {
   companies: Company[];
   contacts: Contact[];
   deals: Deal[];
   activities: Activity[];
+  tasks: Task[];
 }
 
-export const emptyCrm = (): CrmData => ({ companies: [], contacts: [], deals: [], activities: [] });
+export const emptyCrm = (): CrmData => ({ companies: [], contacts: [], deals: [], activities: [], tasks: [] });
 
 // ---------- validation ----------
 
@@ -255,6 +267,7 @@ export function exportContact(data: CrmData, contactId: Id) {
     company: data.companies.find((c) => c.id === contact.companyId) ?? null,
     deals: data.deals.filter((d) => d.contactId === contactId),
     activities: data.activities.filter((a) => a.contactId === contactId),
+    tasks: data.tasks.filter((t) => t.contactId === contactId),
   };
 }
 
@@ -274,9 +287,108 @@ export function eraseContact(data: CrmData, contactId: Id, by: string, now: ISOD
       activities: data.activities
         .filter((a) => !(a.contactId === contactId && !a.dealId))
         .map((a) => (a.contactId === contactId ? { ...a, contactId: undefined } : a)),
+      tasks: data.tasks.filter((t) => !(t.contactId === contactId && !t.dealId)).map((t) => (t.contactId === contactId ? { ...t, contactId: undefined } : t)),
     },
     log: `${now} ${by} erased contact ${contactId} and ${removed} activities`,
   };
+}
+
+// ---------- tasks ----------
+
+/** Open tasks, overdue first, then by due date. */
+export function openTasks(data: CrmData, today: ISODate) {
+  return data.tasks
+    .filter((t) => !t.done)
+    .map((t) => ({ task: t, overdue: t.due < today.slice(0, 10), dueToday: t.due === today.slice(0, 10) }))
+    .sort((a, b) => a.task.due.localeCompare(b.task.due));
+}
+
+export function tasksFor(data: CrmData, ref: RecordRef): Task[] {
+  const key = ref.kind === 'deal' ? 'dealId' : ref.kind === 'contact' ? 'contactId' : 'companyId';
+  return data.tasks.filter((t) => t[key] === ref.id).sort((a, b) => Number(a.done) - Number(b.done) || a.due.localeCompare(b.due));
+}
+
+// ---------- reports ----------
+
+/** Open deals by expected close month (deals without a date go to "No date"). */
+export function forecastByMonth(deals: Deal[]) {
+  const map = new Map<string, { month: string; value: number; weighted: number; count: number }>();
+  for (const d of deals) {
+    if (d.stage === 'won' || d.stage === 'lost') continue;
+    const month = d.expectedClose ? d.expectedClose.slice(0, 7) : 'No date';
+    const row = map.get(month) ?? { month, value: 0, weighted: 0, count: 0 };
+    row.value += d.value;
+    row.weighted += Math.round(d.value * STAGE_PROBABILITY[d.stage]);
+    row.count += 1;
+    map.set(month, row);
+  }
+  return [...map.values()].sort((a, b) => (a.month === 'No date' ? 1 : b.month === 'No date' ? -1 : a.month.localeCompare(b.month)));
+}
+
+/** Which lead sources bring contacts, and which turn into won business. */
+export function sourceReport(data: CrmData) {
+  const map = new Map<string, { source: string; contacts: number; won: number; wonValue: number; lost: number }>();
+  for (const c of data.contacts) {
+    const row = map.get(c.source) ?? { source: c.source, contacts: 0, won: 0, wonValue: 0, lost: 0 };
+    row.contacts += 1;
+    for (const d of data.deals.filter((x) => x.contactId === c.id)) {
+      if (d.stage === 'won') { row.won += 1; row.wonValue += d.value; }
+      if (d.stage === 'lost') row.lost += 1;
+    }
+    map.set(c.source, row);
+  }
+  return [...map.values()].sort((a, b) => b.wonValue - a.wonValue || b.contacts - a.contacts);
+}
+
+// ---------- import ----------
+
+const BASES: LawfulBasis[] = ['consent', 'contract', 'legitimate_interest', 'legal_obligation'];
+
+/** Splits one CSV line, honouring double quotes. */
+export function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',' || ch === ';') { out.push(cur.trim()); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+export interface ImportRow { line: number; contact: Omit<Contact, 'id' | 'createdAt'>; companyName?: string; errors: string[]; duplicate: boolean }
+
+/**
+ * Reads contacts from CSV with a header row. Known columns: first_name, last_name, email, phone, role,
+ * company, source, lawful_basis, consent_date. Rows with errors or an email already on file are flagged, not dropped.
+ */
+export function parseContactsCsv(text: string, existing: CrmData, defaultSource = 'Import'): ImportRow[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const head = splitCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z]+/g, '_').replace(/^_|_$/g, ''));
+  const col = (row: string[], ...names: string[]) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0 && row[i]) return row[i]; } return undefined; };
+  const emails = new Set(existing.contacts.map((c) => c.email?.toLowerCase()).filter(Boolean));
+  return lines.slice(1).map((l, i) => ({ l, i, row: splitCsvLine(l) })).filter((x) => x.row.some((c) => c)).map(({ i, row }) => {
+    let first = col(row, 'first_name', 'firstname', 'first'), last = col(row, 'last_name', 'lastname', 'last', 'surname');
+    const full = col(row, 'name', 'full_name');
+    if (!first && !last && full) { const parts = full.split(/\s+/); first = parts[0]; last = parts.slice(1).join(' '); }
+    const basisRaw = col(row, 'lawful_basis', 'basis')?.toLowerCase().replace(/\s+/g, '_');
+    const lawfulBasis = (BASES.includes(basisRaw as LawfulBasis) ? basisRaw : 'legitimate_interest') as LawfulBasis;
+    const contact: Omit<Contact, 'id' | 'createdAt'> = {
+      firstName: first ?? '', lastName: last ?? '', email: col(row, 'email', 'e_mail'), phone: col(row, 'phone', 'mobile'),
+      role: col(row, 'role', 'title', 'job_title'), source: col(row, 'source') ?? defaultSource, lawfulBasis, consentDate: col(row, 'consent_date'),
+    };
+    const email = contact.email?.toLowerCase();
+    const duplicate = !!email && emails.has(email);
+    if (email) emails.add(email);
+    return { line: i + 2, contact, companyName: col(row, 'company', 'organisation', 'organization'), errors: validateContact(contact), duplicate };
+  });
 }
 
 // ---------- formatting ----------

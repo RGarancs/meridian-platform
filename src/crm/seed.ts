@@ -26,8 +26,8 @@ export function seedCrm(): CrmData {
       { id: 'dl_1', title: 'Birch: Sales + Marketing modules', companyId: 'co_birch', contactId: 'ct_1', stage: 'negotiation', value: 14400, currency: 'EUR', expectedClose: day(10), nextStep: 'Send revised offer', nextStepDue: day(-1), createdAt: daysAgo(55) },
       { id: 'dl_2', title: 'Amber Coast: brand relaunch', companyId: 'co_amber', contactId: 'ct_2', stage: 'proposal', value: 7500, currency: 'EUR', expectedClose: day(21), nextStep: 'Workshop with GM', nextStepDue: day(0), createdAt: daysAgo(40) },
       { id: 'dl_3', title: 'Northlight: People module pilot', companyId: 'co_north', contactId: 'ct_3', stage: 'qualified', value: 9600, currency: 'EUR', expectedClose: day(35), createdAt: daysAgo(35) },
-      { id: 'dl_4', title: 'Rye Field: website and tracking', companyId: 'co_rye', contactId: 'ct_4', stage: 'lead', value: 3500, currency: 'EUR', nextStep: 'Intro call', createdAt: daysAgo(28) },
-      { id: 'dl_5', title: 'Vela: AI training for staff', companyId: 'co_vela', contactId: 'ct_5', stage: 'lead', value: 4200, currency: 'EUR', nextStep: 'Send course outline', nextStepDue: day(3), createdAt: daysAgo(18) },
+      { id: 'dl_4', title: 'Rye Field: website and tracking', companyId: 'co_rye', contactId: 'ct_4', stage: 'lead', value: 3500, currency: 'EUR', expectedClose: day(60), nextStep: 'Intro call', createdAt: daysAgo(28) },
+      { id: 'dl_5', title: 'Vela: AI training for staff', companyId: 'co_vela', contactId: 'ct_5', stage: 'lead', value: 4200, currency: 'EUR', expectedClose: day(45), nextStep: 'Send course outline', nextStepDue: day(3), createdAt: daysAgo(18) },
       { id: 'dl_6', title: 'Birch: strategy workbook', companyId: 'co_birch', contactId: 'ct_6', stage: 'won', value: 3500, currency: 'EUR', createdAt: daysAgo(50), closedAt: daysAgo(20) },
       { id: 'dl_7', title: 'Amber Coast: film package', companyId: 'co_amber', stage: 'lost', value: 11000, currency: 'EUR', lostReason: 'Chose in-house team', createdAt: daysAgo(44), closedAt: daysAgo(15) },
     ],
@@ -38,6 +38,13 @@ export function seedCrm(): CrmData {
       { id: 'ac_4', kind: 'note', text: 'Leave and onboarding in spreadsheets today; 300 staff across 3 countries.', at: daysAgo(30), by: 'Rihards', dealId: 'dl_3', contactId: 'ct_3', companyId: 'co_north' },
       { id: 'ac_5', kind: 'note', text: 'Owner retiring in 3 years, wants the site to sell the business story.', at: daysAgo(27), by: 'Rihards', contactId: 'ct_4', companyId: 'co_rye' },
       { id: 'ac_6', kind: 'stage_change', text: 'Proposal → Won', at: daysAgo(20), by: 'Rihards', dealId: 'dl_6', companyId: 'co_birch' },
+    ],
+    tasks: [
+      { id: 'tk_1', title: 'Send revised 12-month offer to Ilze', due: day(-1), done: false, owner: 'You', dealId: 'dl_1', contactId: 'ct_1', companyId: 'co_birch' },
+      { id: 'tk_2', title: 'Book relaunch workshop with the GM', due: day(0), done: false, owner: 'You', dealId: 'dl_2', contactId: 'ct_2', companyId: 'co_amber' },
+      { id: 'tk_3', title: 'Ask Kadri for the leave spreadsheet', due: day(2), done: false, owner: 'You', dealId: 'dl_3', contactId: 'ct_3', companyId: 'co_north' },
+      { id: 'tk_4', title: 'Draft course outline for Vela', due: day(3), done: false, owner: 'You', dealId: 'dl_5', contactId: 'ct_5', companyId: 'co_vela' },
+      { id: 'tk_5', title: 'Send case study to Andris', due: day(-6), done: true, owner: 'You', contactId: 'ct_6', companyId: 'co_birch' },
     ],
   };
 }

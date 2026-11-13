@@ -3,15 +3,17 @@
 One AI-native platform of business modules, in one design system, sold directly or under a partner's brand.
 Plan and module map: https://claude.ai/artifact/MrCqjPqpTbbhomFzQ8XPCY · Brand strategy: https://claude.ai/artifact/RzYWRJRsoQLXXoUfni6qH5
 
-## What is here (v0.1)
+## What is here (v0.2)
+
+Design v2, "Apple × Revolut": dark navy with an ultramarine accent, or black and white with blue as the duotone; accent options Ultramarine, Blue, Mono or a partner colour.
 
 | Part | State |
 |---|---|
-| Platform shell: module sidebar, search (Cmd+K), light and dark, white-label name and accent (Settings › Brand), activity log | Built |
-| **Sales (CRM)**: Today (what needs you, pipeline, win rate), Deals (board with drag to change stage, list), Companies, Contacts, a record panel with timeline, next step, stage change, GDPR export and delete-forever | Built, example data |
-| **People (HR)**: Overview (what needs you, who is away), Directory with profile and vacation balance, Leave (request, approve with team-clash warning, Latvian holidays excluded), Onboarding checklists, Hiring board (scores, reasons, hire starts onboarding, privacy clean-up), Reviews with weighted goals and bonus rule | Built, example data |
+| Platform shell: grouped sidebar with counts, Cmd+K search across people, deals, companies and pages, light and dark, white-label name and accent, activity log, toasts with Undo after every change, Escape closes the top layer | Built |
+| **Sales (CRM)**: Today (what needs you, pipeline, forecast by month), Deals (board with drag, list), Companies, Contacts (lawful basis filter, CSV import that creates and links companies), Tasks, Reports (stages, lead sources, lost reasons), record panel with timeline, tasks, stage, GDPR export and delete forever | Built, example data |
+| **People (HR)**: Overview, Directory with org chart and person profile, Time off (approvals with team clashes, 4-week calendar, balances, LV holidays), Documents (versions, signatures, expiry), Hiring (board, scores, reasons, salary ranges, hire starts onboarding, GDPR clean-up), Joiners and leavers (checklists by owner, vacation owed on leaving), Goals (company → team → person, roll-up, check-ins, status vs time), Reviews and feedback (weighted goals, spread, praise and growth), Bonuses (score → payout, budget cap), Skills and training (matrix vs role, renewals), Pay bands (compa-ratio), Pulse (anonymous eNPS) | Built, example data |
 | Other modules (Marketing, Work, Insights, Strategy, Academy, Studio, Ledger, Harness) | Listed with what each builds on; Marketing is next |
-| Hosted database: `supabase/migrations/0001_sales.sql`, `0002_people.sql` (partners, tenants, memberships, row-level security per tenant, append-only audit log) | Written, not yet applied |
+| Hosted database: `supabase/migrations/0001`–`0003` (partners, tenants, memberships, row-level security per tenant, append-only audit log) | Written, not yet applied |
 
 The demo keeps data in the browser (`LocalRepository`). Hosting swaps in a Supabase repository behind the same interface; the pages don't change.
 
@@ -36,6 +38,6 @@ npm run build    # also writes dist/meridian-demo.html, the whole app in one fil
 
 ## Next
 
-- Sales: email sync and drafting with approval, import from CSV, owners and permissions, support inbox.
-- People: HPT Index as the team assessment, competences and training, role-based access to reviews and candidates, Easter-based holidays.
+- Sales: email sync and drafting with approval, owners and permissions, support inbox.
+- People: employee self-service view, HPT Index as the team assessment, role-based access to pay, reviews and candidates, Easter-based holidays, e-signature.
 - Hosting: apply the migration to a Supabase project in Frankfurt, add sign-in, deploy on Vercel.

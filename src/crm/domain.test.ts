@@ -1,5 +1,5 @@
 import {
-  CrmData, Deal, emptyCrm, eraseContact, exportContact, followUps, moveDeal, openPipeline,
+  CrmData, Deal, emptyCrm, eraseContact, exportContact, followUps, moveDeal, openPipeline, openTasks, tasksFor, forecastByMonth, sourceReport, parseContactsCsv, splitCsvLine,
   pipelineSummary, search, timeline, validateContact, validateDeal, winRate, eur,
 } from './domain';
 
@@ -126,5 +126,46 @@ describe('eur', () => {
     expect(eur(950)).toBe('€950');
     expect(eur(12500)).toBe('€12.5K');
     expect(eur(2_400_000)).toBe('€2.40M');
+  });
+});
+
+describe('tasks and reports', () => {
+  const d = fixture();
+  d.tasks.push(
+    { id: 't1', title: 'Send deck', due: '2026-11-10', done: false, owner: 'R', dealId: 'd1', contactId: 'c1' },
+    { id: 't2', title: 'Call', due: '2026-11-12', done: false, owner: 'R', contactId: 'c1' },
+    { id: 't3', title: 'Old', due: '2026-11-01', done: true, owner: 'R', companyId: 'co1' },
+  );
+  it('orders open tasks and flags overdue', () => {
+    expect(openTasks(d, '2026-11-12').map((x) => [x.task.id, x.overdue, x.dueToday])).toEqual([['t1', true, false], ['t2', false, true]]);
+    expect(tasksFor(d, { kind: 'contact', id: 'c1' }).map((t) => t.id)).toEqual(['t1', 't2']);
+  });
+  it('erases contact-only tasks with the contact', () => {
+    const { data } = eraseContact(d, 'c1', 'R', '2026-11-12');
+    expect(data.tasks.map((t) => [t.id, t.contactId])).toEqual([['t1', undefined], ['t3', undefined]]);
+  });
+  it('forecasts open deals by month', () => {
+    const f = forecastByMonth([deal({ id: 'a', stage: 'proposal', value: 1000, expectedClose: '2026-12-05' }), deal({ id: 'b', stage: 'lead', value: 500 }), deal({ id: 'c', stage: 'won', value: 9, expectedClose: '2026-12-01' })]);
+    expect(f).toEqual([{ month: '2026-12', value: 1000, weighted: 500, count: 1 }, { month: 'No date', value: 500, weighted: 50, count: 1 }]);
+  });
+  it('reports sources', () => {
+    const r = sourceReport(fixture());
+    expect(r.find((x) => x.source === 'Event')).toEqual({ source: 'Event', contacts: 1, won: 0, wonValue: 0, lost: 0 });
+  });
+});
+
+describe('CSV import', () => {
+  it('reads quoted fields, full names, flags errors and duplicates', () => {
+    const csv = 'Name,Email,Company,Lawful basis\n"Ozola, Anna",anna@kalna.example,Kalna,consent\nPeter Smith,peter@x.example,"Acme, Inc",Legitimate interest\n,,,\n';
+    const rows = parseContactsCsv(csv, fixture());
+    expect(rows).toHaveLength(2);
+    expect(rows[0].duplicate).toBe(true);
+    expect(rows[0].errors).toContain('Consent needs the date it was given.');
+    expect(rows[1].contact).toMatchObject({ firstName: 'Peter', lastName: 'Smith', lawfulBasis: 'legitimate_interest', source: 'Import' });
+    expect(rows[1].companyName).toBe('Acme, Inc');
+    expect(rows[1].errors).toEqual([]);
+  });
+  it('splits on semicolons too', () => {
+    expect(splitCsvLine('a;"b;c";d')).toEqual(['a', 'b;c', 'd']);
   });
 });

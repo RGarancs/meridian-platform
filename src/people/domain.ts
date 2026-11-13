@@ -14,6 +14,9 @@ export interface Person {
   startDate: ISODate;
   location: string;
   leaveAllowance: number; // working days a year
+  salary?: number; // gross a month, EUR (visible to HR and the line manager only)
+  bonusTarget?: number; // share of annual salary at a full (100%) payout, e.g. 0.1
+  lastDay?: ISODate; // set when leaving
 }
 
 export type LeaveKind = 'vacation' | 'sick' | 'unpaid' | 'parental' | 'study';
@@ -48,16 +51,51 @@ export interface Candidate {
 export interface ReviewGoal { text: string; weight: number; score?: number } // weight in %, score 1 to 5
 export interface Review { id: Id; personId: Id; cycle: string; goals: ReviewGoal[]; selfDone: boolean; managerDone: boolean }
 
+export type DocKind = 'policy' | 'contract' | 'certificate' | 'form';
+export interface HrDocument {
+  id: Id; title: string; kind: DocKind; personId?: Id; // no personId = applies to everyone
+  version: number; updatedAt: ISODate; requiresAck: boolean; acks: { personId: Id; version: number; at: ISODate }[];
+  expires?: ISODate; body?: string;
+}
+
+export type GoalLevel = 'company' | 'team' | 'person';
+export type GoalStatus = 'on_track' | 'at_risk' | 'off_track' | 'done';
+export interface Goal {
+  id: Id; title: string; level: GoalLevel; ownerId?: Id; team?: string; parentId?: Id; period: string;
+  progress: number; // 0 to 100, own progress when the goal has no children
+  status: GoalStatus; checkIns: { at: ISODate; by: string; progress: number; note: string }[];
+}
+
+export interface Feedback { id: Id; aboutId: Id; from: string; kind: 'praise' | 'growth'; text: string; at: ISODate; private: boolean }
+
+export interface Skill { id: Id; name: string; area: string }
+export interface Training { id: Id; personId: Id; course: string; done: ISODate; expires?: ISODate }
+export interface PayBand { title: string; min: number; max: number }
+export interface Pulse { id: Id; period: string; scores: number[]; comments: string[] } // eNPS scores 0 to 10, anonymous
+
 export interface PeopleData {
   people: Person[];
   leave: LeaveRequest[];
   onboarding: Onboarding[];
+  offboarding: Onboarding[];
   openings: Opening[];
   candidates: Candidate[];
   reviews: Review[];
+  documents: HrDocument[];
+  goals: Goal[];
+  feedback: Feedback[];
+  skills: Skill[];
+  skillLevels: { personId: Id; skillId: Id; level: number }[]; // 0 none, 1 learning, 2 can do, 3 expert, 4 teaches
+  roleSkills: { title: string; skillId: Id; level: number }[]; // what a role needs
+  training: Training[];
+  bands: PayBand[];
+  pulses: Pulse[];
 }
 
-export const emptyPeople = (): PeopleData => ({ people: [], leave: [], onboarding: [], openings: [], candidates: [], reviews: [] });
+export const emptyPeople = (): PeopleData => ({
+  people: [], leave: [], onboarding: [], offboarding: [], openings: [], candidates: [], reviews: [], documents: [], goals: [],
+  feedback: [], skills: [], skillLevels: [], roleSkills: [], training: [], bands: [], pulses: [],
+});
 
 // ---------- dates ----------
 
@@ -213,4 +251,163 @@ export function directReports(data: PeopleData, managerId: Id) { return data.peo
 export function tenureMonths(p: Person, today: ISODate) {
   const a = toDate(p.startDate), b = toDate(today);
   return Math.max(0, (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth() - (b.getUTCDate() < a.getUTCDate() ? 1 : 0));
+}
+
+// ---------- documents ----------
+
+/** Documents this person still has to read and acknowledge (current version only). */
+export function docsToAcknowledge(data: PeopleData, personId: Id): HrDocument[] {
+  return data.documents.filter((d) => d.requiresAck && (!d.personId || d.personId === personId)
+    && !d.acks.some((a) => a.personId === personId && a.version === d.version));
+}
+
+/** Share of active people who acknowledged the current version of a company-wide document. */
+export function ackRate(data: PeopleData, doc: HrDocument, today: ISODate): { done: number; total: number } {
+  const people = doc.personId ? data.people.filter((p) => p.id === doc.personId) : activePeople(data, today);
+  return { done: people.filter((p) => doc.acks.some((a) => a.personId === p.id && a.version === doc.version)).length, total: people.length };
+}
+
+export function expiringSoon(data: PeopleData, today: ISODate, days = 60) {
+  const limit = addDays(today, days);
+  const docs = data.documents.filter((d) => d.expires && d.expires <= limit).map((d) => ({ title: d.title, personId: d.personId, expires: d.expires!, expired: d.expires! < today }));
+  const courses = data.training.filter((t) => t.expires && t.expires <= limit).map((t) => ({ title: t.course, personId: t.personId, expires: t.expires!, expired: t.expires! < today }));
+  return [...docs, ...courses].sort((a, b) => a.expires.localeCompare(b.expires));
+}
+
+/** A new version clears earlier acknowledgements: everyone reads it again. */
+export function publishNewVersion(doc: HrDocument, today: ISODate, body?: string): HrDocument {
+  return { ...doc, version: doc.version + 1, updatedAt: today, body: body ?? doc.body };
+}
+
+// ---------- goals ----------
+
+export function childGoals(data: PeopleData, id: Id) { return data.goals.filter((g) => g.parentId === id); }
+
+/** A goal with children takes the average of its children's progress; a leaf uses its own. */
+export function goalProgress(data: PeopleData, id: Id, seen = new Set<Id>()): number {
+  const g = data.goals.find((x) => x.id === id);
+  if (!g || seen.has(id)) return 0;
+  seen.add(id);
+  const kids = childGoals(data, id);
+  if (kids.length === 0) return g.progress;
+  return Math.round(kids.reduce((s, k) => s + goalProgress(data, k.id, seen), 0) / kids.length);
+}
+
+/** Status from progress against how far through the period we are. */
+export function suggestStatus(progress: number, periodShare: number): GoalStatus {
+  if (progress >= 100) return 'done';
+  const gap = periodShare * 100 - progress;
+  return gap <= 10 ? 'on_track' : gap <= 25 ? 'at_risk' : 'off_track';
+}
+
+/** "2026-Q4" → how far through the quarter `today` is, 0 to 1. */
+export function periodShare(period: string, today: ISODate): number {
+  const m = /^(\d{4})-Q([1-4])$/.exec(period);
+  if (!m) return 0;
+  const start = `${m[1]}-${String((Number(m[2]) - 1) * 3 + 1).padStart(2, '0')}-01`;
+  const end = addDays(Number(m[2]) === 4 ? `${Number(m[1]) + 1}-01-01` : `${m[1]}-${String(Number(m[2]) * 3 + 1).padStart(2, '0')}-01`, -1);
+  if (today <= start) return 0;
+  if (today >= end) return 1;
+  const span = (toDate(end).getTime() - toDate(start).getTime()) / 86_400_000;
+  return Math.round(((toDate(today).getTime() - toDate(start).getTime()) / 86_400_000 / span) * 100) / 100;
+}
+
+export function checkIn(g: Goal, progress: number, note: string, by: string, at: ISODate, share: number): Goal {
+  const p = Math.max(0, Math.min(100, Math.round(progress)));
+  return { ...g, progress: p, status: suggestStatus(p, share), checkIns: [...g.checkIns, { at, by, progress: p, note }] };
+}
+
+// ---------- skills ----------
+
+/** Skills where a person is below what their role needs, biggest gap first. */
+export function skillGaps(data: PeopleData, personId: Id) {
+  const p = data.people.find((x) => x.id === personId);
+  if (!p) return [];
+  return data.roleSkills.filter((r) => r.title === p.title).map((r) => {
+    const have = data.skillLevels.find((l) => l.personId === personId && l.skillId === r.skillId)?.level ?? 0;
+    return { skill: data.skills.find((s) => s.id === r.skillId)!, need: r.level, have, gap: r.level - have };
+  }).filter((x) => x.skill && x.gap > 0).sort((a, b) => b.gap - a.gap);
+}
+
+// ---------- pay and bonus ----------
+
+/** Salary against the middle of the role's band: 1.0 is the midpoint. */
+export function compaRatio(data: PeopleData, p: Person): number | null {
+  const band = data.bands.find((b) => b.title === p.title);
+  if (!band || !p.salary) return null;
+  return Math.round((p.salary / ((band.min + band.max) / 2)) * 100) / 100;
+}
+
+export interface BonusLine { person: Person; score: number | null; multiplier: number; target: number; amount: number }
+
+/**
+ * Bonus for one review cycle: annual salary × target × multiplier from the review score.
+ * When the sum is above the budget, every amount is scaled down by the same factor.
+ */
+export function bonusPool(data: PeopleData, cycle: string, budget?: number) {
+  const lines: BonusLine[] = data.reviews.filter((r) => r.cycle === cycle).map((r) => {
+    const person = data.people.find((p) => p.id === r.personId)!;
+    const score = r.managerDone ? reviewScore(r) : null;
+    const target = Math.round((person?.salary ?? 0) * 12 * (person?.bonusTarget ?? 0));
+    const multiplier = bonusMultiplier(score);
+    return { person, score, multiplier, target, amount: Math.round(target * multiplier) };
+  }).filter((l) => l.person);
+  const total = lines.reduce((s, l) => s + l.amount, 0);
+  const scale = budget !== undefined && total > budget && total > 0 ? budget / total : 1;
+  const scaled = lines.map((l) => ({ ...l, amount: Math.round(l.amount * scale) }));
+  return { lines: scaled, total: scaled.reduce((s, l) => s + l.amount, 0), unscaledTotal: total, scale: Math.round(scale * 1000) / 1000, waiting: lines.filter((l) => l.score === null).length };
+}
+
+// ---------- leaving ----------
+
+export const DEFAULT_OFFBOARDING: Omit<ChecklistTask, 'id' | 'done'>[] = [
+  { text: 'Confirm last day and notice in writing', owner: 'hr', dueDay: -20 },
+  { text: 'Plan handover of clients and projects', owner: 'manager', dueDay: -14 },
+  { text: 'Exit conversation', owner: 'hr', dueDay: -5 },
+  { text: 'Final pay with unused vacation', owner: 'hr', dueDay: -2 },
+  { text: 'Collect laptop, cards and keys', owner: 'it', dueDay: 0 },
+  { text: 'Close accounts and forward email', owner: 'it', dueDay: 0 },
+  { text: 'Employment certificate', owner: 'hr', dueDay: 1 },
+];
+
+export function startOffboarding(personId: Id, lastDay: ISODate, id: Id): Onboarding {
+  return { id, personId, startDate: lastDay, tasks: DEFAULT_OFFBOARDING.map((t, i) => ({ ...t, id: `${id}_${i}`, done: false })) };
+}
+
+/** Vacation days owed on leaving: allowance earned to the last day minus days taken and booked before it. */
+export function unusedVacationOnLeaving(data: PeopleData, personId: Id, lastDay: ISODate): number {
+  const p = data.people.find((x) => x.id === personId);
+  if (!p) return 0;
+  const year = Number(lastDay.slice(0, 4));
+  const yearStart = p.startDate > `${year}-01-01` ? p.startDate : `${year}-01-01`;
+  const share = (toDate(lastDay).getTime() - toDate(yearStart).getTime() + 86_400_000) / (365 * 86_400_000);
+  const earned = Math.round(p.leaveAllowance * Math.min(1, share) * 10) / 10;
+  const b = leaveBalance(data, personId, year, addDays(lastDay, 1));
+  return Math.max(0, Math.round((earned - b.taken - b.booked) * 10) / 10);
+}
+
+export function activePeople(data: PeopleData, today: ISODate) {
+  return data.people.filter((p) => p.startDate <= today && (!p.lastDay || p.lastDay >= today));
+}
+
+// ---------- engagement ----------
+
+/** eNPS: % promoters (9 to 10) minus % detractors (0 to 6). Hidden below 5 answers to keep people anonymous. */
+export function enps(scores: number[]): number | null {
+  if (scores.length < 5) return null;
+  const pro = scores.filter((s) => s >= 9).length, det = scores.filter((s) => s <= 6).length;
+  return Math.round(((pro - det) / scores.length) * 100);
+}
+
+// ---------- org chart ----------
+
+export interface OrgNode { person: Person; reports: OrgNode[] }
+export function orgTree(data: PeopleData, today: ISODate): OrgNode[] {
+  const people = data.people.filter((p) => !p.lastDay || p.lastDay >= today);
+  const ids = new Set(people.map((p) => p.id));
+  const build = (p: Person, seen: Set<Id>): OrgNode => ({
+    person: p,
+    reports: people.filter((r) => r.managerId === p.id && !seen.has(r.id)).map((r) => build(r, new Set([...seen, r.id]))),
+  });
+  return people.filter((p) => !p.managerId || !ids.has(p.managerId)).map((p) => build(p, new Set([p.id])));
 }
