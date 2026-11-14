@@ -1,3 +1,4 @@
+import { tr } from '../platform/i18n';
 // The automatic and agentic layer for Sales and customer service ("VG" and "Daniels").
 // Every rule here is plain code: scores, groups and suggestions are explained by their reasons,
 // never by a model's say-so. Drafts are suggestions a person edits and approves before anything is sent.
@@ -52,7 +53,7 @@ export function companyFacts(data: CrmData, companyId: Id, today: ISODate): Comp
 
 export type HealthBand = 'healthy' | 'watch' | 'at_risk';
 export interface Health { score: number; band: HealthBand; reasons: { text: string; impact: number }[] }
-export const HEALTH_LABEL: Record<HealthBand, string> = { healthy: 'Healthy', watch: 'Watch', at_risk: 'At risk' };
+export const HEALTH_LABEL: Record<HealthBand, string> = { healthy: tr("Healthy"), watch: tr("Watch"), at_risk: tr("At risk") };
 
 /**
  * A 0–100 score that starts at 70 and moves with each signal. Every move is kept as a reason,
@@ -62,25 +63,25 @@ export function healthCheck(data: CrmData, companyId: Id, today: ISODate): Healt
   const f = companyFacts(data, companyId, today);
   const reasons: { text: string; impact: number }[] = [];
   const add = (impact: number, text: string) => reasons.push({ impact, text });
-  if (f.daysSinceTouch === null) add(-20, 'Never contacted');
-  else if (f.daysSinceTouch <= 14) add(+10, `In touch ${f.daysSinceTouch === 0 ? 'today' : `${f.daysSinceTouch} days ago`}`);
-  else if (f.daysSinceTouch <= 30) add(-5, `Quiet for ${f.daysSinceTouch} days`);
-  else if (f.daysSinceTouch <= 60) add(-15, `Quiet for ${f.daysSinceTouch} days`);
-  else add(-30, `Quiet for ${f.daysSinceTouch} days`);
-  if (f.isCustomer) add(+10, `Customer, ${eur(f.wonValue)} won`);
-  if (f.openValue > 0) add(+10, `${eur(f.openValue)} in open deals`);
-  if (f.lostRecent) add(-15 * f.lostRecent, `Lost ${f.lostRecent === 1 ? 'a deal' : `${f.lostRecent} deals`} in the last 90 days`);
-  if (f.urgentTickets) add(-15 * f.urgentTickets, `${f.urgentTickets} urgent or late support ${f.urgentTickets === 1 ? 'ticket' : 'tickets'}`);
-  else if (f.openTickets) add(-5, `${f.openTickets} open support ${f.openTickets === 1 ? 'ticket' : 'tickets'}`);
+  if (f.daysSinceTouch === null) add(-20, tr('Never contacted'));
+  else if (f.daysSinceTouch <= 14) add(+10, (f.daysSinceTouch === 0 ? tr('In touch today') : tr('In touch {0} days ago', { 0: f.daysSinceTouch })));
+  else if (f.daysSinceTouch <= 30) add(-5, tr('Quiet for {0} days', { 0: f.daysSinceTouch }));
+  else if (f.daysSinceTouch <= 60) add(-15, tr('Quiet for {0} days', { 0: f.daysSinceTouch }));
+  else add(-30, tr('Quiet for {0} days', { 0: f.daysSinceTouch }));
+  if (f.isCustomer) add(+10, tr('Customer, {0} won', { 0: eur(f.wonValue) }));
+  if (f.openValue > 0) add(+10, tr('{0} in open deals', { 0: eur(f.openValue) }));
+  if (f.lostRecent) add(-15 * f.lostRecent, (f.lostRecent === 1 ? tr('Lost a deal in the last 90 days') : tr('Lost {0} deals in the last 90 days', { 0: f.lostRecent })));
+  if (f.urgentTickets) add(-15 * f.urgentTickets, (f.urgentTickets === 1 ? tr('1 urgent or late support ticket') : tr('{0} urgent or late support tickets', { 0: f.urgentTickets })));
+  else if (f.openTickets) add(-5, (f.openTickets === 1 ? tr('1 open support ticket') : tr('{0} open support tickets', { 0: f.openTickets })));
   // a renewal date kept as a custom property: quiet before a renewal is the classic churn signal
-  const renewalDef = data.properties.find((p) => p.entity === 'company' && p.type === 'date' && /renew/i.test(p.label));
+  const renewalDef = data.properties.find((p) => p.entity === 'company' && p.type === 'date' && /renew|atjaun/i.test(p.label));
   const renewal = renewalDef ? f.company.props?.[renewalDef.id] : undefined;
   if (typeof renewal === 'string') {
     const left = days(today, renewal);
-    if (left >= 0 && left <= 45 && (f.daysSinceTouch ?? 999) > 30) add(-20, `Renews in ${left} days and has gone quiet`);
-    else if (left >= 0 && left <= 45) add(0, `Renews in ${left} days`);
+    if (left >= 0 && left <= 45 && (f.daysSinceTouch ?? 999) > 30) add(-20, tr('Renews in {0} days and has gone quiet', { 0: left }));
+    else if (left >= 0 && left <= 45) add(0, tr('Renews in {0} days', { 0: left }));
   }
-  if (f.overdueTasks) add(-5 * f.overdueTasks, `${f.overdueTasks} overdue ${f.overdueTasks === 1 ? 'task' : 'tasks'}`);
+  if (f.overdueTasks) add(-5 * f.overdueTasks, (f.overdueTasks === 1 ? tr('1 overdue task') : tr('{0} overdue tasks', { 0: f.overdueTasks })));
   const score = Math.max(0, Math.min(100, 70 + reasons.reduce((s, r) => s + r.impact, 0)));
   return { score, band: score >= 70 ? 'healthy' : score >= 45 ? 'watch' : 'at_risk', reasons: reasons.sort((a, b) => a.impact - b.impact) };
 }
@@ -139,14 +140,14 @@ export function clusterCompanies(data: CrmData, today: ISODate, k = 5): Cluster[
 }
 
 const NAMES = {
-  growing: { label: 'Growing customers', why: 'Customers with a new deal open.', action: 'Close the add-on before the renewal.' },
-  loyal: { label: 'Loyal customers', why: 'Have bought and are in regular touch.', action: 'Ask for a referral or a case study.' },
-  quietCustomers: { label: 'Quiet customers', why: 'Have bought before but nobody has talked to them lately.', action: 'Send a check-in or the customer newsletter.' },
-  hot: { label: 'Hot prospects', why: 'Large open deals and recent contact.', action: 'Keep a dated next step on every deal.' },
-  warm: { label: 'Warm prospects', why: 'Some open value, contact is thinning.', action: 'Book a call before they go cold.' },
-  cold: { label: 'Cold leads', why: 'No deals moving and no recent contact.', action: 'Nurture with the newsletter, or close them out.' },
-  bigNew: { label: 'Big new names', why: 'Large companies early in the relationship.', action: 'Find a second contact and a first meeting.' },
-  early: { label: 'New leads', why: 'New, with a deal opened but no conversation logged yet.', action: 'Book the first call and qualify: budget, need, timing.' },
+  growing: { label: tr("Growing customers"), why: tr("Customers with a new deal open."), action: tr("Close the add-on before the renewal.") },
+  loyal: { label: tr("Loyal customers"), why: tr("Have bought and are in regular touch."), action: tr("Ask for a referral or a case study.") },
+  quietCustomers: { label: tr("Quiet customers"), why: tr("Have bought before but nobody has talked to them lately."), action: tr("Send a check-in or the customer newsletter.") },
+  hot: { label: tr("Hot prospects"), why: tr("Large open deals and recent contact."), action: tr("Keep a dated next step on every deal.") },
+  warm: { label: tr("Warm prospects"), why: tr("Some open value, contact is thinning."), action: tr("Book a call before they go cold.") },
+  cold: { label: tr("Cold leads"), why: tr("No deals moving and no recent contact."), action: tr("Nurture with the newsletter, or close them out.") },
+  bigNew: { label: tr("Big new names"), why: tr("Large companies early in the relationship."), action: tr("Find a second contact and a first meeting.") },
+  early: { label: tr("New leads"), why: tr("New, with a deal opened but no conversation logged yet."), action: tr("Book the first call and qualify: budget, need, timing.") },
 };
 
 function dist(a: number[], b: number[]) { return a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0); }
@@ -168,7 +169,7 @@ export function validateProps(data: CrmData, entity: 'company' | 'contact', prop
 // ---------- customer service ----------
 
 const SLA_HOURS: Record<Priority, number> = { high: 4, normal: 24, low: 72 };
-export const SLA_LABEL = 'First reply within 4 hours (high), 24 hours (normal) or 3 days (low).';
+export const SLA_LABEL = tr("First reply within 4 hours (high), 24 hours (normal) or 3 days (low).");
 
 /** When the first reply is due and whether it is late. Solved or answered tickets are never late. */
 export function slaState(t: Ticket, now: ISODate) {
@@ -179,15 +180,15 @@ export function slaState(t: Ticket, now: ISODate) {
 }
 
 const TOPICS: { topic: string; words: string[] }[] = [
-  { topic: 'Billing', words: ['invoice', 'bill', 'payment', 'charge', 'refund', 'price', 'vat'] },
-  { topic: 'Access', words: ['login', 'log in', 'password', 'access', 'locked', 'invite'] },
-  { topic: 'Bug', words: ['error', 'broken', 'bug', 'crash', 'not working', "doesn't work", 'fails', 'wrong'] },
-  { topic: 'Cancel', words: ['cancel', 'terminate', 'stop the contract', 'leave', 'switch to'] },
-  { topic: 'How to', words: ['how do', 'how can', 'where can', 'is it possible', 'can i'] },
-  { topic: 'Feature request', words: ['would be great', 'could you add', 'feature', 'wish'] },
+  { topic: 'Billing', words: ['rēķin', 'maksājum', 'cena', 'pvn', 'atmaks', 'invoice', 'bill', 'payment', 'charge', 'refund', 'price', 'vat'] },
+  { topic: 'Access', words: ['parol', 'pieeja', 'pieslēg', 'bloķ', 'ielūg', 'login', 'log in', 'password', 'access', 'locked', 'invite'] },
+  { topic: 'Bug', words: ['kļūd', 'nestrādā', 'salūz', 'nedarbojas', 'error', 'broken', 'bug', 'crash', 'not working', "doesn't work", 'fails', 'wrong'] },
+  { topic: 'Cancel', words: ['atcelt', 'pārtraukt līgumu', 'izbeigt', 'pāriet uz', 'cancel', 'terminate', 'stop the contract', 'leave', 'switch to'] },
+  { topic: 'How to', words: ['kā es', 'kā var', 'kur var', 'vai ir iespējams', 'how do', 'how can', 'where can', 'is it possible', 'can i'] },
+  { topic: 'Feature request', words: ['būtu lieliski', 'vai varat pievienot', 'funkcij', 'would be great', 'could you add', 'feature', 'wish'] },
 ];
-const URGENT = ['urgent', 'asap', 'immediately', 'today', 'down', 'cannot work', "can't work", 'angry', 'unacceptable'];
-const NEGATIVE = ['disappointed', 'angry', 'unacceptable', 'frustrated', 'again', 'still', 'worst', 'cancel'];
+const URGENT = ['steidzam', 'nekavējoties', 'šodien', 'nevaram strādāt', 'urgent', 'asap', 'immediately', 'today', 'down', 'cannot work', "can't work", 'angry', 'unacceptable'];
+const NEGATIVE = ['vīlušies', 'dusmīg', 'nepieņemam', 'atkal', 'joprojām', 'atcelt', 'disappointed', 'angry', 'unacceptable', 'frustrated', 'again', 'still', 'worst', 'cancel'];
 
 /** Reads a message and suggests a topic, a priority and the tone, with the words that decided it. */
 export function triage(text: string): { topic: string; priority: Priority; tone: 'calm' | 'upset'; because: string[] } {
@@ -224,8 +225,8 @@ export function draftReply(data: CrmData, t: Ticket, signer: string): string {
   const c = data.contacts.find((x) => x.id === t.contactId);
   const topic = t.topic ?? triage(t.messages.map((m) => m.text).join(' ')).topic;
   const tone = triage(t.messages.filter((m) => m.from === 'customer').map((m) => m.text).join(' ')).tone;
-  const sorry = tone === 'upset' && topic !== 'Access' ? 'I am sorry this has been frustrating. ' : '';
-  return `Hi ${c?.firstName ?? 'there'},\n\n${sorry}${cap(OPENERS[topic] ?? OPENERS.Question)} ${NEXT[topic] ?? NEXT.Question}\n\nBest,\n${signer}`;
+  const sorry = tone === 'upset' && topic !== 'Access' ? tr('I am sorry this has been frustrating.') + ' ' : '';
+  return `${c?.firstName ? tr('Hi {0},', { 0: c.firstName }) : tr('Hi there,')}\n\n${sorry}${cap(tr(OPENERS[topic] ?? OPENERS.Question))} ${tr(NEXT[topic] ?? NEXT.Question)}\n\n${tr('Best,')}\n${signer}`;
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -267,28 +268,28 @@ export function audience(data: CrmData, rule: SegmentRule, today: ISODate) {
   const included: Contact[] = [];
   const excluded: { contact: Contact; reason: string }[] = [];
   for (const c of data.contacts.filter((x) => x.companyId && companies.has(x.companyId))) {
-    if (!c.email) excluded.push({ contact: c, reason: 'No email address' });
-    else if (c.unsubscribed) excluded.push({ contact: c, reason: 'Unsubscribed' });
+    if (!c.email) excluded.push({ contact: c, reason: tr("No email address") });
+    else if (c.unsubscribed) excluded.push({ contact: c, reason: tr("Unsubscribed") });
     else if (c.lawfulBasis === 'consent' && c.consentDate) included.push(c);
     else if (customers.has(c.companyId!) && c.lawfulBasis !== 'legal_obligation') included.push(c);
-    else excluded.push({ contact: c, reason: 'No consent and not a customer' });
+    else excluded.push({ contact: c, reason: tr("No consent and not a customer") });
   }
   return { included, excluded };
 }
 
 export function validateCampaign(c: Pick<Campaign, 'name' | 'subject' | 'body'>, recipients: number): string[] {
   const e: string[] = [];
-  if (!c.name.trim()) e.push('Name the newsletter.');
-  if (!c.subject.trim()) e.push('Write a subject line.');
-  if (c.subject.length > 70) e.push('Keep the subject under 70 characters so it fits on a phone.');
-  if (c.body.trim().length < 40) e.push('The message is too short to send.');
-  if (!/unsubscribe/i.test(c.body)) e.push('Add an unsubscribe line: the law needs one in every newsletter.');
-  if (recipients === 0) e.push('Nobody in this segment may receive it.');
+  if (!c.name.trim()) e.push(tr('Name the newsletter.'));
+  if (!c.subject.trim()) e.push(tr('Write a subject line.'));
+  if (c.subject.length > 70) e.push(tr('Keep the subject under 70 characters so it fits on a phone.'));
+  if (c.body.trim().length < 40) e.push(tr('The message is too short to send.'));
+  if (!/unsubscribe|atrakstī/i.test(c.body)) e.push(tr('Add an unsubscribe line: the law needs one in every newsletter.'));
+  if (recipients === 0) e.push(tr('Nobody in this segment may receive it.'));
   return e;
 }
 
 export function personalise(body: string, c: Contact, companyName?: string) {
-  return body.replace(/\{first_name\}/g, c.firstName).replace(/\{company\}/g, companyName ?? 'your company');
+  return body.replace(/\{first_name\}/g, c.firstName).replace(/\{company\}/g, companyName ?? tr('your company'));
 }
 
 /** A starting text for a segment: short, one idea, one ask. */
@@ -317,29 +318,29 @@ export function suggestions(data: CrmData, today: ISODate): Suggestion[] {
   const t = today.slice(0, 10);
   const due = (n: number) => new Date(Date.parse(t) + n * DAY).toISOString().slice(0, 10);
   for (const t2 of (data.tickets ?? []).filter((x) => x.status !== 'solved' && slaState(x, today).breached)) {
-    out.push({ id: `sla:${t2.id}`, kind: 'service', title: `Reply to “${t2.subject}”`, why: `First reply is late (${t2.priority} priority). A draft is ready to edit.`, open: { page: 'service', ticketId: t2.id } });
+    out.push({ id: `sla:${t2.id}`, kind: 'service', title: tr("Reply to “{0}”", { 0: t2.subject }), why: tr("First reply is late ({0} priority). A draft is ready to edit.", { 0: t2.priority }), open: { page: 'service', ticketId: t2.id } });
   }
   for (const co of data.companies) {
     const h = healthCheck(data, co.id, today);
     if (h.band === 'at_risk' && !data.tasks.some((x) => !x.done && x.companyId === co.id && x.title.startsWith('Check-in'))) {
       const c = data.contacts.find((x) => x.companyId === co.id);
-      out.push({ id: `health:${co.id}`, kind: 'health', title: `Check-in call with ${co.name}`, why: `Health ${h.score}/100: ${h.reasons.filter((r) => r.impact < 0).map((r) => r.text.toLowerCase()).slice(0, 2).join(', ')}.`,
-        task: { title: `Check-in call with ${c ? `${c.firstName} at ` : ''}${co.name}`, due: due(2), companyId: co.id, contactId: c?.id } });
+      out.push({ id: `health:${co.id}`, kind: 'health', title: tr("Check-in call with {0}", { 0: co.name }), why: tr("Health {0}/100: {1}.", { 0: h.score, 1: h.reasons.filter((r) => r.impact < 0).map((r) => r.text.toLowerCase()).slice(0, 2).join(', ') }),
+        task: { title: tr("Check-in call with {0}{1}", { 0: c ? `${c.firstName} at ` : '', 1: co.name }), due: due(2), companyId: co.id, contactId: c?.id } });
     }
   }
   for (const f of followUps(data, today).filter((x) => x.reason !== 'next_step_due')) {
-    out.push({ id: `deal:${f.deal.id}:${f.reason}`, kind: 'deal', title: f.reason === 'no_next_step' ? `Set a next step on ${f.deal.title}` : `Nudge ${f.deal.title}`,
-      why: f.reason === 'no_next_step' ? 'Open deals without a dated next step stall.' : 'No activity for 14 days.',
-      task: { title: f.reason === 'no_next_step' ? `Agree the next step for ${f.deal.title}` : `Follow up on ${f.deal.title}`, due: due(1), dealId: f.deal.id, companyId: f.deal.companyId, contactId: f.deal.contactId } });
+    out.push({ id: `deal:${f.deal.id}:${f.reason}`, kind: 'deal', title: f.reason === 'no_next_step' ? tr("Set a next step on {0}", { 0: f.deal.title }) : tr("Nudge {0}", { 0: f.deal.title }),
+      why: f.reason === 'no_next_step' ? tr("Open deals without a dated next step stall.") : tr("No activity for 14 days."),
+      task: { title: f.reason === 'no_next_step' ? tr("Agree the next step for {0}", { 0: f.deal.title }) : tr("Follow up on {0}", { 0: f.deal.title }), due: due(1), dealId: f.deal.id, companyId: f.deal.companyId, contactId: f.deal.contactId } });
   }
   for (const c of data.contacts.filter((x) => x.lawfulBasis === 'consent' && x.consentDate && days(x.consentDate, today) > 700)) {
-    out.push({ id: `consent:${c.id}`, kind: 'consent', title: `Ask ${c.firstName} ${c.lastName} to renew consent`, why: 'Consent is almost 2 years old. Renew it or move them off the newsletter.',
-      task: { title: `Renew consent: ${c.firstName} ${c.lastName}`, due: due(7), contactId: c.id, companyId: c.companyId } });
+    out.push({ id: `consent:${c.id}`, kind: 'consent', title: tr("Ask {0} {1} to renew consent", { 0: c.firstName, 1: c.lastName }), why: tr("Consent is almost 2 years old. Renew it or move them off the newsletter."),
+      task: { title: tr("Renew consent: {0} {1}", { 0: c.firstName, 1: c.lastName }), due: due(7), contactId: c.id, companyId: c.companyId } });
   }
   const quiet = clusterCompanies(data, today).find((c) => c.label.startsWith('Quiet customers'));
   const sentRecently = (data.campaigns ?? []).some((c) => c.segment.cluster === quiet?.id && c.sentAt && days(c.sentAt, today) < 30);
   if (quiet && !sentRecently) {
-    out.push({ id: `news:${quiet.id}:${t.slice(0, 7)}`, kind: 'newsletter', title: quiet.companyIds.length === 1 ? 'Send a check-in newsletter to your quiet customer' : `Send a check-in newsletter to ${quiet.companyIds.length} quiet customers`, why: quiet.why, open: { page: 'newsletters', clusterId: quiet.id } });
+    out.push({ id: `news:${quiet.id}:${t.slice(0, 7)}`, kind: 'newsletter', title: quiet.companyIds.length === 1 ? tr("Send a check-in newsletter to your quiet customer") : tr("Send a check-in newsletter to {0} quiet customers", { 0: quiet.companyIds.length }), why: quiet.why, open: { page: 'newsletters', clusterId: quiet.id } });
   }
   return out.filter((s) => !(data.dismissed ?? []).includes(s.id));
 }

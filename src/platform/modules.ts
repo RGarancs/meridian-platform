@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 // The one list of platform modules. The sidebar, the module map and the
 // tenant's plan all read from here, so a module is added in one place.
 
@@ -13,14 +14,14 @@ export interface ModuleDef {
 }
 
 export const MODULES: ModuleDef[] = [
-  { id: 'sales', name: 'Sales', oneLine: 'CRM, follow-ups and support in one timeline', status: 'live', buildsOn: ['Meridian OS Pipeline', 'Meridian Growth pipeline'] },
-  { id: 'people', name: 'People', oneLine: 'Hiring, onboarding, leave, reviews and growth', status: 'live', buildsOn: ['HPT Index', 'vakances-lv salary data'] },
-  { id: 'marketing', name: 'Marketing', oneLine: 'From brand to campaign to results, with sources', status: 'next', buildsOn: ['Meridian Marketing', 'Meridian OS', 'Meridian Motion', 'Meridian Growth'] },
-  { id: 'work', name: 'Work', oneLine: "Goals down to today's tasks, and the updates in between", status: 'planned', buildsOn: ['Cockpit goals'] },
-  { id: 'insights', name: 'Insights', oneLine: 'Your numbers explained, with the decision they point to', status: 'planned', buildsOn: ['Mantinieks', 'datalab analytics'] },
-  { id: 'strategy', name: 'Strategy', oneLine: 'Research, options and a team workbook', status: 'planned', buildsOn: ['Where AI belongs', 'Decision coach', 'Proving Ground'] },
-  { id: 'academy', name: 'Academy', oneLine: 'Courses and AI coaching inside the work', status: 'planned', buildsOn: ['Applied AI Academy', 'miniMBA LMS'] },
-  { id: 'studio', name: 'Studio', oneLine: 'Presentations, boards, processes, documents', status: 'planned', buildsOn: ['NS Board v3', 'presentation tools'] },
-  { id: 'ledger', name: 'Ledger', oneLine: 'Small-team finance, invoices and runway', status: 'planned', buildsOn: ['FIRE app', 'HPT invoices'] },
-  { id: 'harness', name: 'Harness', oneLine: 'Build with AI the safe way: plugins, design system, cockpit', status: 'planned', buildsOn: ['conductor', 'rihards-protocol', 'ai-native-kit', 'Meridian design system'] },
+  { id: 'sales', name: tr("Sales"), oneLine: tr("CRM, follow-ups and support in one timeline"), status: 'live', buildsOn: ['Meridian OS Pipeline', 'Meridian Growth pipeline'] },
+  { id: 'people', name: tr("People"), oneLine: tr("Hiring, onboarding, leave, reviews and growth"), status: 'live', buildsOn: ['HPT Index', 'vakances-lv salary data'] },
+  { id: 'marketing', name: tr("Marketing"), oneLine: tr("From brand to campaign to results, with sources"), status: 'next', buildsOn: ['Meridian Marketing', 'Meridian OS', 'Meridian Motion', 'Meridian Growth'] },
+  { id: 'work', name: tr("Work"), oneLine: tr("Goals down to today's tasks, and the updates in between"), status: 'planned', buildsOn: ['Cockpit goals'] },
+  { id: 'insights', name: tr("Insights"), oneLine: tr("Your numbers explained, with the decision they point to"), status: 'planned', buildsOn: ['Mantinieks', 'datalab analytics'] },
+  { id: 'strategy', name: tr("Strategy"), oneLine: tr("Research, options and a team workbook"), status: 'planned', buildsOn: ['Where AI belongs', 'Decision coach', 'Proving Ground'] },
+  { id: 'academy', name: tr("Academy"), oneLine: tr("Courses and AI coaching inside the work"), status: 'planned', buildsOn: ['Applied AI Academy', 'miniMBA LMS'] },
+  { id: 'studio', name: tr("Studio"), oneLine: tr("Presentations, boards, processes, documents"), status: 'planned', buildsOn: ['NS Board v3', 'presentation tools'] },
+  { id: 'ledger', name: tr("Ledger"), oneLine: tr("Small-team finance, invoices and runway"), status: 'planned', buildsOn: ['FIRE app', 'HPT invoices'] },
+  { id: 'harness', name: tr("Harness"), oneLine: tr("Build with AI the safe way: plugins, design system, cockpit"), status: 'planned', buildsOn: ['conductor', 'rihards-protocol', 'ai-native-kit', 'Meridian design system'] },
 ];

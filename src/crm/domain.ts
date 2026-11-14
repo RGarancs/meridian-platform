@@ -1,3 +1,4 @@
+import { tr, locale, euro, dec } from '../platform/i18n';
 // CRM domain: types and pure rules. No I/O here, so every rule is unit-tested.
 // Object shapes follow Meridian OS (contacts, companies, deals, one timeline per record)
 // and carry GDPR fields on every contact.
@@ -43,12 +44,12 @@ export const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'won', 'l
 export type Stage = (typeof STAGES)[number];
 
 export const STAGE_LABEL: Record<Stage, string> = {
-  lead: 'Lead',
-  qualified: 'Qualified',
-  proposal: 'Proposal',
-  negotiation: 'Negotiation',
-  won: 'Won',
-  lost: 'Lost',
+  lead: tr("Lead"),
+  qualified: tr("Qualified"),
+  proposal: tr("Proposal"),
+  negotiation: tr("Negotiation"),
+  won: tr("Won"),
+  lost: tr("Lost"),
 };
 
 // Default win likelihood per stage, used for the weighted pipeline.
@@ -270,13 +271,13 @@ export function search(data: CrmData, q: string, limit = 12): SearchHit[] {
   const companyName = (id?: Id) => data.companies.find((c) => c.id === id)?.name ?? '';
   for (const c of data.companies)
     if ([c.name, c.domain, c.industry].some((v) => v?.toLowerCase().includes(needle)))
-      hits.push({ ref: { kind: 'company', id: c.id }, label: c.name, sub: 'Company' });
+      hits.push({ ref: { kind: 'company', id: c.id }, label: c.name, sub: tr("Company") });
   for (const c of data.contacts)
     if ([`${c.firstName} ${c.lastName}`, c.email, c.role].some((v) => v?.toLowerCase().includes(needle)))
       hits.push({ ref: { kind: 'contact', id: c.id }, label: `${c.firstName} ${c.lastName}`, sub: ['Contact', companyName(c.companyId)].filter(Boolean).join(' · ') });
   for (const d of data.deals)
     if (d.title.toLowerCase().includes(needle))
-      hits.push({ ref: { kind: 'deal', id: d.id }, label: d.title, sub: `Deal · ${STAGE_LABEL[d.stage]}` });
+      hits.push({ ref: { kind: 'deal', id: d.id }, label: d.title, sub: tr("Deal · {0}", { 0: STAGE_LABEL[d.stage] }) });
   return hits.slice(0, limit);
 }
 
@@ -421,7 +422,7 @@ export function parseContactsCsv(text: string, existing: CrmData, defaultSource 
 // ---------- formatting ----------
 
 export function eur(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `€${(n / 1_000_000).toFixed(2)}M`;
-  if (Math.abs(n) >= 10_000) return `€${(n / 1000).toFixed(1)}K`;
-  return `€${n.toLocaleString('en-GB')}`;
+  if (Math.abs(n) >= 1_000_000) return euro(`${dec(n / 1_000_000, 2)}${tr('M')}`);
+  if (Math.abs(n) >= 10_000) return euro(`${dec(n / 1000, 1)}${tr('K')}`);
+  return euro(n.toLocaleString(locale()));
 }

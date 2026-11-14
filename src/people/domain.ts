@@ -1,3 +1,4 @@
+import { tr } from '../platform/i18n';
 // People (HR) domain: pure rules, unit-tested. Pages only call these.
 // Latvian defaults where a law sets them (4 weeks = 20 working days paid leave), editable per tenant.
 
@@ -38,7 +39,7 @@ export interface Onboarding { id: Id; personId: Id; startDate: ISODate; tasks: C
 
 export const CANDIDATE_STAGES = ['applied', 'screen', 'interview', 'offer', 'hired', 'rejected'] as const;
 export type CandidateStage = (typeof CANDIDATE_STAGES)[number];
-export const CANDIDATE_LABEL: Record<CandidateStage, string> = { applied: 'Applied', screen: 'Screen', interview: 'Interview', offer: 'Offer', hired: 'Hired', rejected: 'Rejected' };
+export const CANDIDATE_LABEL: Record<CandidateStage, string> = { applied: tr("Applied"), screen: tr("Screen"), interview: tr("Interview"), offer: tr("Offer"), hired: tr("Hired"), rejected: tr("Rejected") };
 
 export interface Opening { id: Id; title: string; team: string; hiringManagerId?: Id; open: boolean; salaryFrom?: number; salaryTo?: number }
 export interface Candidate {
@@ -180,14 +181,14 @@ export function whoIsAway(data: PeopleData, day: ISODate): { person: Person; req
 // ---------- onboarding ----------
 
 export const DEFAULT_ONBOARDING: Omit<ChecklistTask, 'id' | 'done'>[] = [
-  { text: 'Send contract and collect signed copy', owner: 'hr', dueDay: -14 },
-  { text: 'Order laptop and accounts', owner: 'it', dueDay: -7 },
-  { text: 'Pick a buddy and book a first-day lunch', owner: 'manager', dueDay: -3 },
-  { text: 'Welcome, tour, meet the team', owner: 'manager', dueDay: 0 },
-  { text: 'Safety and data-protection briefing', owner: 'hr', dueDay: 1 },
-  { text: 'Agree 30, 60 and 90-day goals', owner: 'manager', dueDay: 5 },
-  { text: 'First week check-in', owner: 'manager', dueDay: 7 },
-  { text: 'Feedback on onboarding', owner: 'newcomer', dueDay: 30 },
+  { text: tr("Send contract and collect signed copy"), owner: 'hr', dueDay: -14 },
+  { text: tr("Order laptop and accounts"), owner: 'it', dueDay: -7 },
+  { text: tr("Pick a buddy and book a first-day lunch"), owner: 'manager', dueDay: -3 },
+  { text: tr("Welcome, tour, meet the team"), owner: 'manager', dueDay: 0 },
+  { text: tr("Safety and data-protection briefing"), owner: 'hr', dueDay: 1 },
+  { text: tr("Agree 30, 60 and 90-day goals"), owner: 'manager', dueDay: 5 },
+  { text: tr("First week check-in"), owner: 'manager', dueDay: 7 },
+  { text: tr("Feedback on onboarding"), owner: 'newcomer', dueDay: 30 },
 ];
 
 export function startOnboarding(personId: Id, startDate: ISODate, id: Id, template = DEFAULT_ONBOARDING): Onboarding {
@@ -361,13 +362,13 @@ export function bonusPool(data: PeopleData, cycle: string, budget?: number) {
 // ---------- leaving ----------
 
 export const DEFAULT_OFFBOARDING: Omit<ChecklistTask, 'id' | 'done'>[] = [
-  { text: 'Confirm last day and notice in writing', owner: 'hr', dueDay: -20 },
-  { text: 'Plan handover of clients and projects', owner: 'manager', dueDay: -14 },
-  { text: 'Exit conversation', owner: 'hr', dueDay: -5 },
-  { text: 'Final pay with unused vacation', owner: 'hr', dueDay: -2 },
-  { text: 'Collect laptop, cards and keys', owner: 'it', dueDay: 0 },
-  { text: 'Close accounts and forward email', owner: 'it', dueDay: 0 },
-  { text: 'Employment certificate', owner: 'hr', dueDay: 1 },
+  { text: tr("Confirm last day and notice in writing"), owner: 'hr', dueDay: -20 },
+  { text: tr("Plan handover of clients and projects"), owner: 'manager', dueDay: -14 },
+  { text: tr("Exit conversation"), owner: 'hr', dueDay: -5 },
+  { text: tr("Final pay with unused vacation"), owner: 'hr', dueDay: -2 },
+  { text: tr("Collect laptop, cards and keys"), owner: 'it', dueDay: 0 },
+  { text: tr("Close accounts and forward email"), owner: 'it', dueDay: 0 },
+  { text: tr("Employment certificate"), owner: 'hr', dueDay: 1 },
 ];
 
 export function startOffboarding(personId: Id, lastDay: ISODate, id: Id): Onboarding {

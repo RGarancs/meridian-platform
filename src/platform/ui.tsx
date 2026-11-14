@@ -1,3 +1,4 @@
+import { tr, locale, count, lang } from './i18n';
 // Shared building blocks. Every module page uses these, so the platform behaves one way everywhere:
 // one primary action per page, secondary actions behind ⋯, a toast (with Undo where possible) after every change,
 // Escape closes the top-most layer, tooltips explain feature words.
@@ -69,7 +70,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((t) => (
           <div key={t.id} className="toast">
             <span>{t.text}</span>
-            {t.undo && <button onClick={() => { t.undo!(); setItems((xs) => xs.filter((x) => x.id !== t.id)); }}>Undo</button>}
+            {t.undo && <button onClick={() => { t.undo!(); setItems((xs) => xs.filter((x) => x.id !== t.id)); }}>{tr("Undo")}</button>}
           </div>
         ))}
       </div>
@@ -95,7 +96,7 @@ export function useEscape(onClose: () => void, active = true) {
 
 // ---------- ⋯ menu ----------
 export type MenuItem = { label: string; icon?: string; onClick: () => void; danger?: boolean } | 'divider';
-export function Menu({ items, label = 'More actions', className }: { items: MenuItem[]; label?: string; className?: string }) {
+export function Menu({ items, label = tr("More actions"), className }: { items: MenuItem[]; label?: string; className?: string }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const btn = useRef<HTMLButtonElement>(null);
@@ -158,7 +159,7 @@ export function Panel({ title, eyebrow, lead, actions, onClose, children }: { ti
             <h2 style={{ fontSize: 20, letterSpacing: '-.02em' }}>{title}</h2>
           </div>
           {actions}
-          <button className="btn sm icon ghost" onClick={onClose} aria-label="Close" data-tip="Close (Esc)"><Icon name="close" /></button>
+          <button className="btn sm icon ghost" onClick={onClose} aria-label={tr("Close")} data-tip={tr("Close (Esc)")}><Icon name="close" /></button>
         </div>
         <div className="panel-body">{children}</div>
       </aside>
@@ -221,10 +222,11 @@ export function Bar({ value, tone = '' }: { value: number; tone?: '' | 'pos' | '
   return <div className={`bar ${tone}`} role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-export const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-export const fmtDayYear = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+export const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString(locale(), { day: 'numeric', month: 'short', timeZone: 'UTC' });
+// Latvian writes a full date as 09.12.2026.; English as 9 Dec 2026.
+export const fmtDayYear = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString(locale(), lang() === 'lv' ? { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' } : { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 export const todayIso = () => new Date().toISOString().slice(0, 10);
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+export const plural = (n: number, one: string, many = `${one}s`) => count(n, one, many);
 
 // ---------- right-click menus ----------
 // Every row, tile and card that has a ⋯ menu also opens the same menu on right-click (and Shift+F10),
@@ -276,7 +278,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     <CtxCtx.Provider value={setSt}>
       {children}
       {st && (
-        <div ref={box} className="menu ctx" role="menu" aria-label={st.title ?? 'Actions'}
+        <div ref={box} className="menu ctx" role="menu" aria-label={st.title ?? tr("Actions")}
           style={{ position: 'fixed', top: Math.min(st.y, window.innerHeight - 40 - st.items.length * 38), left: Math.min(st.x, window.innerWidth - 216) }}
           onKeyDown={(e) => {
             const bs = [...(box.current?.querySelectorAll('button') ?? [])];
@@ -334,7 +336,7 @@ export function Tabs({ items, value, onChange, max = 7, label }: { items: Tab[];
       {rest.length > 0 && (
         <div ref={ref} className="tab-more">
           <button className="tab" aria-selected={!!activeInRest} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 228)) }); setOpen(!open); }}>
-            {activeInRest ? activeInRest.label : 'More'}<Icon name="chevron" size={14} />
+            {activeInRest ? activeInRest.label : tr("More")}<Icon name="chevron" size={14} />
           </button>
           {open && (
             <div className="menu" role="menu" style={{ position: 'fixed', top: at.top, left: at.left, zIndex: 60 }}>
@@ -354,7 +356,7 @@ export function ShowMore<T>({ items, n = 5, render, noun = 'more' }: { items: T[
   return (
     <>
       {(all ? items : items.slice(0, n)).map(render)}
-      {items.length > n && <button className="show-more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show ${items.length - n} ${noun}`}</button>}
+      {items.length > n && <button className="show-more" onClick={() => setAll(!all)}>{all ? tr("Show less") : tr("Show {0} {1}", { 0: items.length - n, 1: noun })}</button>}
     </>
   );
 }

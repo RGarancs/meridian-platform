@@ -1,3 +1,4 @@
+import { tr, lang, setLang, LANGS, Lang } from './platform/i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MODULES } from './platform/modules';
 import { LocalRepository } from './platform/store';
@@ -20,44 +21,44 @@ import { Head, Icon, Kbd, Panel, Seg, Tabs, useEscape, todayIso } from './platfo
 // and a secondary sidebar inside pages with sections (Settings).
 type Page = { id: string; label: string; icon: string; tip?: string };
 const SALES: Page[] = [
-  { id: 'today', label: 'Today', icon: 'today' }, { id: 'deals', label: 'Deals', icon: 'deals' },
-  { id: 'customers', label: 'Customers', icon: 'heart', tip: 'Health checked automatically, segments found automatically' },
-  { id: 'service', label: 'Service', icon: 'mail', tip: 'Support inbox with drafted replies you approve' },
-  { id: 'newsletters', label: 'Newsletters', icon: 'mail' }, { id: 'autopilot', label: 'Autopilot', icon: 'sparkle', tip: 'Suggested next actions, each with its reason' },
-  { id: 'contacts', label: 'Contacts', icon: 'contact' }, { id: 'companies', label: 'Companies', icon: 'company' },
-  { id: 'tasks', label: 'Tasks', icon: 'task' }, { id: 'reports', label: 'Reports', icon: 'chart' },
+  { id: 'today', label: tr("Today"), icon: 'today' }, { id: 'deals', label: tr("Deals"), icon: 'deals' },
+  { id: 'customers', label: tr("Customers"), icon: 'heart', tip: tr("Health checked automatically, segments found automatically") },
+  { id: 'service', label: tr("Service"), icon: 'mail', tip: tr("Support inbox with drafted replies you approve") },
+  { id: 'newsletters', label: tr("Newsletters"), icon: 'mail' }, { id: 'autopilot', label: tr("Autopilot"), icon: 'sparkle', tip: tr("Suggested next actions, each with its reason") },
+  { id: 'contacts', label: tr("Contacts"), icon: 'contact' }, { id: 'companies', label: tr("Companies"), icon: 'company' },
+  { id: 'tasks', label: tr("Tasks"), icon: 'task' }, { id: 'reports', label: tr("Reports"), icon: 'chart' },
 ];
 const PEOPLE: Page[] = [
-  { id: 'overview', label: 'Overview', icon: 'today' }, { id: 'directory', label: 'Directory', icon: 'people' }, { id: 'timeoff', label: 'Time off', icon: 'calendar' },
-  { id: 'documents', label: 'Documents', icon: 'doc' }, { id: 'hiring', label: 'Hiring', icon: 'hire' }, { id: 'goals', label: 'Goals', icon: 'target' },
-  { id: 'reviews', label: 'Reviews', icon: 'star' }, { id: 'moves', label: 'Joiners and leavers', icon: 'door' }, { id: 'bonuses', label: 'Bonuses', icon: 'coin' },
-  { id: 'skills', label: 'Skills and training', icon: 'skill' }, { id: 'pay', label: 'Pay bands', icon: 'chart' }, { id: 'pulse', label: 'Pulse', icon: 'heart' },
+  { id: 'overview', label: tr("Overview"), icon: 'today' }, { id: 'directory', label: tr("Directory"), icon: 'people' }, { id: 'timeoff', label: tr("Time off"), icon: 'calendar' },
+  { id: 'documents', label: tr("Documents"), icon: 'doc' }, { id: 'hiring', label: tr("Hiring"), icon: 'hire' }, { id: 'goals', label: tr("Goals"), icon: 'target' },
+  { id: 'reviews', label: tr("Reviews"), icon: 'star' }, { id: 'moves', label: tr("Joiners and leavers"), icon: 'door' }, { id: 'bonuses', label: tr("Bonuses"), icon: 'coin' },
+  { id: 'skills', label: tr("Skills and training"), icon: 'skill' }, { id: 'pay', label: tr("Pay bands"), icon: 'chart' }, { id: 'pulse', label: tr("Pulse"), icon: 'heart' },
 ];
 const GROUPS = [
-  { id: 'sales', label: 'Sales', icon: 'deals', key: 's', pages: SALES },
-  { id: 'people', label: 'People', icon: 'people', key: 'p', pages: PEOPLE },
+  { id: 'sales', label: tr("Sales"), icon: 'deals', key: 's', pages: SALES },
+  { id: 'people', label: tr("People"), icon: 'people', key: 'p', pages: PEOPLE },
 ];
 const SETTINGS = [
-  { id: 'brand', label: 'Brand', icon: 'sparkle' }, { id: 'properties', label: 'Customer properties', icon: 'grid' },
-  { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'settings' }, { id: 'log', label: 'Activity log', icon: 'doc' }, { id: 'data', label: 'Demo data', icon: 'trash' },
+  { id: 'brand', label: tr("Brand"), icon: 'sparkle' }, { id: 'properties', label: tr("Customer properties"), icon: 'grid' },
+  { id: 'language', label: tr("Language and region"), icon: 'grid' }, { id: 'shortcuts', label: tr("Keyboard shortcuts"), icon: 'settings' }, { id: 'log', label: tr("Activity log"), icon: 'doc' }, { id: 'data', label: tr("Demo data"), icon: 'trash' },
 ];
 
 // White label: a partner's names and accent replace Corta Meridian's. Everything else stays.
 type Accent = 'ultramarine' | 'blue' | 'mono' | 'custom';
 interface Branding { name: string; short: string; accent: Accent; custom: string; theme: 'dark' | 'light' }
 const ACCENTS: Record<Exclude<Accent, 'custom'>, { label: string; dark: [string, string]; light: [string, string] }> = {
-  ultramarine: { label: 'Ultramarine', dark: ['#3D4BFF', '#FFFFFF'], light: ['#1F3BFF', '#FFFFFF'] },
-  blue: { label: 'Blue', dark: ['#0A84FF', '#FFFFFF'], light: ['#0071E3', '#FFFFFF'] },
-  mono: { label: 'Mono', dark: ['#F5F7FF', '#03050C'], light: ['#000000', '#FFFFFF'] },
+  ultramarine: { label: tr("Ultramarine"), dark: ['#3D4BFF', '#FFFFFF'], light: ['#1F3BFF', '#FFFFFF'] },
+  blue: { label: tr("Blue"), dark: ['#0A84FF', '#FFFFFF'], light: ['#0071E3', '#FFFFFF'] },
+  mono: { label: tr("Mono"), dark: ['#F5F7FF', '#03050C'], light: ['#000000', '#FFFFFF'] },
 };
 const prefersLight = () => { try { return window.matchMedia('(prefers-color-scheme: light)').matches; } catch { return false; } };
-const DEFAULT_BRAND = (): Branding => ({ name: 'Corta Meridian', short: 'Meridian', accent: 'ultramarine', custom: '#7C5CFF', theme: prefersLight() ? 'light' : 'dark' });
+const DEFAULT_BRAND = (): Branding => ({ name: tr("Corta Meridian"), short: 'Meridian', accent: 'ultramarine', custom: '#7C5CFF', theme: prefersLight() ? 'light' : 'dark' });
 const loadBrand = (): Branding => {
   try {
     const b = JSON.parse(localStorage.getItem('meridian:brand:v2') ?? 'null');
     if (!b) return DEFAULT_BRAND();
     const old = !b.name || b.name === 'Meridian';
-    return { ...DEFAULT_BRAND(), ...b, name: old ? 'Corta Meridian' : b.name, short: b.short ?? (old ? 'Meridian' : b.name) };
+    return { ...DEFAULT_BRAND(), ...b, name: old ? tr("Corta Meridian") : b.name, short: b.short ?? (old ? 'Meridian' : b.name) };
   } catch { return DEFAULT_BRAND(); }
 };
 
@@ -74,9 +75,9 @@ function parseHash(): Route {
 }
 
 const SHORTCUTS: [string[], string][] = [
-  [['⌘', 'K'], 'Search people, deals, customers and pages'], [['/'], 'Search'], [['G', 'S'], 'Go to Sales'], [['G', 'P'], 'Go to People'], [['G', ','], 'Go to settings'],
-  [['['], 'Previous tab'], [[']'], 'Next tab'], [['N'], 'The page’s main action (new deal, book time off…)'], [['T'], 'Switch light or dark'],
-  [['Right-click'], 'Actions for any row, tile or card'], [['Shift', 'F10'], 'Same actions from the keyboard'], [['Esc'], 'Close the top-most panel or menu'], [['?'], 'This list'],
+  [['⌘', 'K'], tr("Search people, deals, customers and pages")], [['/'], 'Search'], [['G', 'S'], tr("Go to Sales")], [['G', 'P'], tr("Go to People")], [['G', ','], tr("Go to settings")],
+  [['['], tr("Previous tab")], [[']'], tr("Next tab")], [['N'], 'The page’s main action (new deal, book time off…)'], [['T'], tr("Switch light or dark")],
+  [['Right-click'], tr("Actions for any row, tile or card")], [['Shift', 'F10'], tr("Same actions from the keyboard")], [['Esc'], tr("Close the top-most panel or menu")], [['?'], tr("This list")],
 ];
 
 export default function App() {
@@ -152,36 +153,37 @@ export default function App() {
 
   return (
     <div className="app">
-      <nav className="side" aria-label="Modules">
+      <nav className="side" aria-label={tr("Modules")}>
         <div className="brand" data-tip={brand.name}><span className="brand-mark" aria-hidden />{brand.short}</div>
-        <button className="find" onClick={() => setPalette(true)}><Icon name="search" size={16} />Search or jump to<kbd>⌘K</kbd></button>
+        <button className="find" onClick={() => setPalette(true)}><Icon name="search" size={16} />{tr("Search or jump to")}<kbd>⌘K</kbd></button>
         {GROUPS.map((g) => (
-          <button key={g.id} className="mod" aria-current={route.module === g.id ? 'page' : undefined} onClick={() => go(g.id)} data-tip={`G then ${g.key.toUpperCase()}`}>
+          <button key={g.id} className="mod" aria-current={route.module === g.id ? 'page' : undefined} onClick={() => go(g.id)} data-tip={tr("G then {0}", { 0: g.key.toUpperCase() })}>
             <Icon name={g.icon} />{g.label}{moduleCount(g.id) ? <span className="count">{moduleCount(g.id)}</span> : null}
           </button>
         ))}
-        <div className="side-label">Coming</div>
+        <div className="side-label">{tr("Coming")}</div>
         {MODULES.filter((m) => m.status !== 'live').map((m) => (
           <button key={m.id} className="mod planned" aria-current={route.module === m.id ? 'page' : undefined} onClick={() => go(m.id)} style={{ color: 'var(--muted)', fontWeight: 400 }}>
-            <Icon name="grid" size={16} />{m.name}<span className="soon">{m.status === 'next' ? 'Next' : 'Planned'}</span>
+            <Icon name="grid" size={16} />{m.name}<span className="soon">{m.status === 'next' ? tr("Next") : tr("Planned")}</span>
           </button>
         ))}
         <div className="side-foot">
-          <button className="mod" aria-current={route.module === 'settings' ? 'page' : undefined} onClick={() => go('settings')} style={{ fontWeight: 400 }}><Icon name="settings" size={16} />Settings</button>
-          <button className="mod" onClick={() => setHelp(true)} style={{ fontWeight: 400, color: 'var(--muted)' }}><Icon name="sparkle" size={16} />Shortcuts<span className="soon"><Kbd>?</Kbd></span></button>
+          <button className="mod" aria-current={route.module === 'settings' ? 'page' : undefined} onClick={() => go('settings')} style={{ fontWeight: 400 }}><Icon name="settings" size={16} />{tr("Settings")}</button>
+          <button className="mod" onClick={() => setHelp(true)} style={{ fontWeight: 400, color: 'var(--muted)' }}><Icon name="sparkle" size={16} />{tr("Shortcuts")}<span className="soon"><Kbd>?</Kbd></span></button>
         </div>
       </nav>
       <div className="main">
         <header className="top">
-          <span className="crumb">{group ? <>{group.label} <Icon name="chevron" size={12} className="rot-90" /> <b>{page?.label}</b></> : <b>{route.module === 'settings' ? 'Settings' : mod?.name}</b>}</span>
+          <span className="crumb">{group ? <>{group.label} <Icon name="chevron" size={12} className="rot-90" /> <b>{page?.label}</b></> : <b>{route.module === 'settings' ? tr("Settings") : mod?.name}</b>}</span>
           <div className="spacer" />
-          <button className="btn sm icon ghost" aria-label="Search" onClick={() => setPalette(true)} data-tip="Search (⌘K)"><Icon name="search" /></button>
-          <button className="btn sm icon ghost" onClick={toggleTheme} aria-label={brand.theme === 'dark' ? 'Switch to light' : 'Switch to dark'} data-tip={`${brand.theme === 'dark' ? 'Light' : 'Dark'} (T)`}><Icon name={brand.theme === 'dark' ? 'sun' : 'moon'} /></button>
+          <button className="btn sm icon ghost" aria-label={tr("Search")} onClick={() => setPalette(true)} data-tip={tr("Search (⌘K)")}><Icon name="search" /></button>
+          <button className="btn sm ghost" onClick={() => setLang(lang() === 'en' ? 'lv' : 'en')} aria-label={tr("Language")} data-tip={lang() === 'en' ? 'Latviešu' : 'English'} style={{ fontWeight: 600, letterSpacing: '.04em' }}>{lang() === 'en' ? 'LV' : 'EN'}</button>
+          <button className="btn sm icon ghost" onClick={toggleTheme} aria-label={brand.theme === 'dark' ? tr("Switch to light") : tr("Switch to dark")} data-tip={`${brand.theme === 'dark' ? 'Light' : 'Dark'} (T)`}><Icon name={brand.theme === 'dark' ? 'sun' : 'moon'} /></button>
         </header>
         <main className="content" ref={main}>
           {group && (
             <div className="page" style={{ paddingBottom: 0, gap: 0 }}>
-              <Tabs label={`${group.label} pages`} value={route.page} onChange={(id) => go(group.id, id)} max={7}
+              <Tabs label={tr("{0} pages", { 0: group.label })} value={route.page} onChange={(id) => go(group.id, id)} max={7}
                 items={group.pages.map((p) => ({ id: p.id, label: p.label, count: counts[`${group.id}-${p.id}`], tip: p.tip }))} />
             </div>
           )}
@@ -210,7 +212,7 @@ export default function App() {
           {route.module === 'settings' && <Settings section={route.page} go={(s) => go('settings', s)} brand={brand} setBrand={setBrand} crm={crm} audit={repo.auditLog()} onReset={() => { repo.reset(); clearJson('people'); location.reload(); }} />}
           {mod && mod.status !== 'live' && (
             <div className="page">
-              <Head eyebrow={mod.status === 'next' ? 'Building next' : 'Planned'} title={`${mod.name}: ${mod.oneLine.toLowerCase()}.`} lede="It folds in tools that already exist, on the same design and the same rules as Sales and People." />
+              <Head eyebrow={mod.status === 'next' ? tr("Building next") : tr("Planned")} title={`${mod.name}: ${mod.oneLine.toLowerCase()}.`} lede={tr("It folds in tools that already exist, on the same design and the same rules as Sales and People.")} />
               <div className="card tight"><div className="rows">{mod.buildsOn.map((b) => <div key={b} className="row" style={{ cursor: 'default' }}><Icon name="check" /><div className="grow"><div className="t">{b}</div></div></div>)}</div></div>
             </div>
           )}
@@ -219,7 +221,7 @@ export default function App() {
       {rec && <RecordPanel crm={crm} refr={rec} onClose={() => setRec(null)} onOpen={openRec} />}
       {person && <PersonPanel hr={hr} id={person} onClose={() => setPerson(null)} onPerson={openPerson} go={(p) => go('people', p)} />}
       {palette && <Palette crm={crm} hr={hr} onClose={() => setPalette(false)} onRec={openRec} onPerson={openPerson} go={go} toggleTheme={toggleTheme} />}
-      {help && <Panel title="Keyboard shortcuts" eyebrow="Faster without the mouse" onClose={() => setHelp(false)}><ShortcutList /></Panel>}
+      {help && <Panel title={tr("Keyboard shortcuts")} eyebrow={tr("Faster without the mouse")} onClose={() => setHelp(false)}><ShortcutList /></Panel>}
     </div>
   );
 }
@@ -238,24 +240,25 @@ function Palette({ crm, hr, onClose, onRec, onPerson, go, toggleTheme }: {
   useEscape(onClose);
   const s = q.trim().toLowerCase();
   const hits: Hit[] = useMemo(() => {
-    const pages = GROUPS.flatMap((g) => g.pages.map((p) => ({ key: `${g.id}-${p.id}`, group: 'Go to', label: `${g.label} › ${p.label}`, icon: p.icon, run: () => go(g.id, p.id) })));
+    const pages = GROUPS.flatMap((g) => g.pages.map((p) => ({ key: `${g.id}-${p.id}`, group: tr("Go to"), label: `${g.label} › ${p.label}`, icon: p.icon, run: () => go(g.id, p.id) })));
     const extra: Hit[] = [
-      ...SETTINGS.map((x) => ({ key: `settings-${x.id}`, group: 'Go to', label: `Settings › ${x.label}`, icon: 'settings', run: () => go('settings', x.id) })),
-      { key: 'theme', group: 'Do', label: 'Switch light or dark', icon: 'sun', run: toggleTheme },
+      ...SETTINGS.map((x) => ({ key: `settings-${x.id}`, group: tr("Go to"), label: tr("Settings › {0}", { 0: x.label }), icon: 'settings', run: () => go('settings', x.id) })),
+      { key: 'theme', group: tr('Do'), label: tr("Switch light or dark"), icon: 'sun', run: toggleTheme },
+      { key: 'lang', group: tr('Do'), label: lang() === 'en' ? 'Latviešu valoda' : 'Switch to English', icon: 'grid', run: () => setLang(lang() === 'en' ? 'lv' : 'en') },
     ];
-    if (!s) return [...pages.filter((p) => ['sales-today', 'sales-autopilot', 'sales-service', 'people-overview', 'people-timeoff'].includes(p.key)), extra[extra.length - 1]];
+    if (!s) return [...pages.filter((p) => ['sales-today', 'sales-autopilot', 'sales-service', 'people-overview', 'people-timeoff'].includes(p.key)), ...extra.slice(-2)];
     const people = hr.data.people.filter((p) => `${p.name} ${p.title} ${p.team}`.toLowerCase().includes(s)).slice(0, 6)
-      .map((p) => ({ key: `p${p.id}`, group: 'People', label: p.name, sub: `${p.title} · ${p.team}`, icon: 'contact', run: () => onPerson(p.id) }));
-    const recs = search(crm.data, q).slice(0, 8).map((h) => ({ key: `${h.ref.kind}${h.ref.id}`, group: 'Sales', label: h.label, sub: h.sub, icon: h.ref.kind === 'deal' ? 'deals' : h.ref.kind === 'company' ? 'company' : 'contact', run: () => onRec(h.ref) }));
-    const tickets = crm.data.tickets.filter((t) => t.subject.toLowerCase().includes(s)).slice(0, 4).map((t) => ({ key: `t${t.id}`, group: 'Service', label: t.subject, sub: t.status, icon: 'mail', run: () => go('sales', 'service', t.id) }));
+      .map((p) => ({ key: `p${p.id}`, group: tr('People'), label: p.name, sub: `${p.title} · ${p.team}`, icon: 'contact', run: () => onPerson(p.id) }));
+    const recs = search(crm.data, q).slice(0, 8).map((h) => ({ key: `${h.ref.kind}${h.ref.id}`, group: tr('Sales'), label: h.label, sub: h.sub, icon: h.ref.kind === 'deal' ? 'deals' : h.ref.kind === 'company' ? 'company' : 'contact', run: () => onRec(h.ref) }));
+    const tickets = crm.data.tickets.filter((t) => t.subject.toLowerCase().includes(s)).slice(0, 4).map((t) => ({ key: `t${t.id}`, group: tr('Service'), label: t.subject, sub: tr(t.status), icon: 'mail', run: () => go('sales', 'service', t.id) }));
     return [...people, ...recs, ...tickets, ...[...pages, ...extra].filter((p) => p.label.toLowerCase().includes(s))];
   }, [s, q, crm.data, hr.data, go, onPerson, onRec, toggleTheme]);
   const pick = (h?: Hit) => { if (!h) return; onClose(); h.run(); };
   let lastGroup = '';
   return (
     <div className="palette-scrim" onMouseDown={onClose}>
-      <div className="palette" role="dialog" aria-label="Search" onMouseDown={(e) => e.stopPropagation()}>
-        <input autoFocus value={q} placeholder="Search people, deals, customers, tickets or pages" aria-label="Search"
+      <div className="palette" role="dialog" aria-label={tr("Search")} onMouseDown={(e) => e.stopPropagation()}>
+        <input autoFocus value={q} placeholder={tr("Search people, deals, customers, tickets or pages")} aria-label={tr("Search")}
           onChange={(e) => { setQ(e.target.value); setSel(0); }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setSel(Math.min(sel + 1, hits.length - 1)); }
@@ -263,7 +266,7 @@ function Palette({ crm, hr, onClose, onRec, onPerson, go, toggleTheme }: {
             if (e.key === 'Enter') pick(hits[sel]);
           }} />
         <div className="results" role="listbox">
-          {hits.length === 0 && <div className="sub" style={{ padding: 16 }}>Nothing matches “{q}”.</div>}
+          {hits.length === 0 && <div className="sub" style={{ padding: 16 }}>{tr("Nothing matches “")}{q}”.</div>}
           {hits.map((h, i) => {
             const head = h.group !== lastGroup ? <div className="grp">{h.group}</div> : null;
             lastGroup = h.group;
@@ -277,7 +280,7 @@ function Palette({ crm, hr, onClose, onRec, onPerson, go, toggleTheme }: {
             );
           })}
         </div>
-        <div className="sub" style={{ padding: '8px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: 14 }}><span><Kbd>↑</Kbd> <Kbd>↓</Kbd> move</span><span><Kbd>↵</Kbd> open</span><span><Kbd>Esc</Kbd> close</span><span style={{ marginLeft: 'auto' }}><Kbd>?</Kbd> all shortcuts</span></div>
+        <div className="sub" style={{ padding: '8px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: 14 }}><span><Kbd>↑</Kbd> <Kbd>↓</Kbd> {tr("move")}</span><span><Kbd>↵</Kbd> {tr("open")}</span><span><Kbd>{tr("Esc")}</Kbd> {tr("close")}</span><span style={{ marginLeft: 'auto' }}><Kbd>?</Kbd> {tr("all shortcuts")}</span></div>
       </div>
     </div>
   );
@@ -288,26 +291,26 @@ function Settings({ section, go, brand, setBrand, crm, audit, onReset }: { secti
   const cur = SETTINGS.find((s) => s.id === section) ?? SETTINGS[0];
   return (
     <div className="page">
-      <Head eyebrow="Settings" title={cur.id === 'brand' ? 'Your brand on the platform.' : cur.label} />
+      <Head eyebrow={tr("Settings")} title={cur.id === 'brand' ? tr("Your brand on the platform.") : cur.label} />
       <div className="split">
-        <nav className="subnav" aria-label="Settings sections">
-          <div className="sub-label">Workspace</div>
+        <nav className="subnav" aria-label={tr("Settings sections")}>
+          <div className="sub-label">{tr("Workspace")}</div>
           {SETTINGS.slice(0, 2).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
-          <div className="sub-label">You</div>
+          <div className="sub-label">{tr("You")}</div>
           {SETTINGS.slice(2).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
         </nav>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           {cur.id === 'brand' && (
             <div className="card">
-              <p className="sub" style={{ marginTop: 0 }}>Partners sell this platform under their own name. Change the names and accent and every page follows. Approvals, sources and the activity log stay the same under any brand.</p>
+              <p className="sub" style={{ marginTop: 0 }}>{tr("Partners sell this platform under their own name. Change the names and accent and every page follows. Approvals, sources and the activity log stay the same under any brand.")}</p>
               <div className="form">
                 <div className="row2">
-                  <div className="field"><label htmlFor="bn"><span data-tip="Page titles, emails and documents." tabIndex={0}>Full name</span></label><input id="bn" className="input" value={brand.name} onChange={(e) => setBrand({ ...brand, name: e.target.value || 'Corta Meridian' })} /></div>
-                  <div className="field"><label htmlFor="bs"><span data-tip="The sidebar and tight spaces." tabIndex={0}>Short name</span></label><input id="bs" className="input" value={brand.short} onChange={(e) => setBrand({ ...brand, short: e.target.value || 'Meridian' })} /></div>
+                  <div className="field"><label htmlFor="bn"><span data-tip={tr("Page titles, emails and documents.")} tabIndex={0}>{tr("Full name")}</span></label><input id="bn" className="input" value={brand.name} onChange={(e) => setBrand({ ...brand, name: e.target.value || tr("Corta Meridian") })} /></div>
+                  <div className="field"><label htmlFor="bs"><span data-tip={tr("The sidebar and tight spaces.")} tabIndex={0}>{tr("Short name")}</span></label><input id="bs" className="input" value={brand.short} onChange={(e) => setBrand({ ...brand, short: e.target.value || 'Meridian' })} /></div>
                 </div>
-                <div className="field"><label>Appearance</label><Seg label="Appearance" value={brand.theme} onChange={(v) => setBrand({ ...brand, theme: v })} options={[{ id: 'dark', label: 'Dark navy' }, { id: 'light', label: 'Black and white' }]} /></div>
+                <div className="field"><label>{tr("Appearance")}</label><Seg label={tr("Appearance")} value={brand.theme} onChange={(v) => setBrand({ ...brand, theme: v })} options={[{ id: 'dark', label: tr("Dark navy") }, { id: 'light', label: tr("Black and white") }]} /></div>
                 <div className="field">
-                  <label>Accent</label>
+                  <label>{tr("Accent")}</label>
                   <div className="toolbar">
                     {(Object.keys(ACCENTS) as (keyof typeof ACCENTS)[]).map((k) => (
                       <button key={k} className="btn" aria-pressed={brand.accent === k} onClick={() => setBrand({ ...brand, accent: k })} style={brand.accent === k ? { borderColor: 'var(--accent)' } : undefined}>
@@ -315,28 +318,36 @@ function Settings({ section, go, brand, setBrand, crm, audit, onReset }: { secti
                       </button>
                     ))}
                     <label className="btn" style={brand.accent === 'custom' ? { borderColor: 'var(--accent)' } : undefined}>
-                      <input type="color" value={brand.custom} onChange={(e) => setBrand({ ...brand, accent: 'custom', custom: e.target.value })} style={{ width: 18, height: 18, padding: 0, border: 0, background: 'none' }} aria-label="Partner colour" />Partner colour
+                      <input type="color" value={brand.custom} onChange={(e) => setBrand({ ...brand, accent: 'custom', custom: e.target.value })} style={{ width: 18, height: 18, padding: 0, border: 0, background: 'none' }} aria-label={tr("Partner colour")} />{tr("Partner colour")}
                     </label>
                   </div>
                 </div>
-                <div><button className="btn ghost" onClick={() => setBrand({ ...DEFAULT_BRAND(), theme: brand.theme })}>Back to Corta Meridian</button></div>
+                <div><button className="btn ghost" onClick={() => setBrand({ ...DEFAULT_BRAND(), theme: brand.theme })}>{tr("Back to Corta Meridian")}</button></div>
               </div>
             </div>
           )}
           {cur.id === 'properties' && <PropertySettings crm={crm} />}
+          {cur.id === 'language' && (
+            <div className="card">
+              <div className="form">
+                <div className="field"><label>{tr("Interface language")}</label><Seg label={tr("Interface language")} value={lang()} onChange={(v: Lang) => setLang(v)} options={LANGS.map((l) => ({ id: l.id, label: l.label }))} /></div>
+                <p className="sub" style={{ margin: 0 }}>{tr("Dates, numbers and money follow the language.")}</p>
+              </div>
+            </div>
+          )}
           {cur.id === 'shortcuts' && <div className="card"><ShortcutList /></div>}
           {cur.id === 'log' && (
             <div className="card">
-              <p className="sub" style={{ marginTop: 0 }}>Every Sales change is recorded with who made it. Erasing a contact is logged without their personal data.</p>
-              {audit.length === 0 ? <div className="sub">Nothing yet.</div> : <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 420, overflow: 'auto', margin: 0, color: 'var(--body)' }}>{audit.slice(-60).reverse().join('\n')}</pre>}
+              <p className="sub" style={{ marginTop: 0 }}>{tr("Every Sales change is recorded with who made it. Erasing a contact is logged without their personal data.")}</p>
+              {audit.length === 0 ? <div className="sub">{tr("Nothing yet.")}</div> : <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 420, overflow: 'auto', margin: 0, color: 'var(--body)' }}>{audit.slice(-60).reverse().join('\n')}</pre>}
             </div>
           )}
           {cur.id === 'data' && (
             <div className="card">
-              <p className="sub" style={{ marginTop: 0 }}>All names and companies in this demo are invented. Changes you make stay in this browser only.</p>
+              <p className="sub" style={{ marginTop: 0 }}>{tr("All names and companies in this demo are invented. Changes you make stay in this browser only.")}</p>
               <div className="toolbar">
-                {confirm ? <><span className="sub">Every change you made in this demo will be lost.</span><button className="btn danger" onClick={onReset}>Reset now</button><button className="btn ghost" onClick={() => setConfirm(false)}>Keep my changes</button></>
-                  : <button className="btn ghost danger" onClick={() => setConfirm(true)}>Reset the example data</button>}
+                {confirm ? <><span className="sub">{tr("Every change you made in this demo will be lost.")}</span><button className="btn danger" onClick={onReset}>{tr("Reset now")}</button><button className="btn ghost" onClick={() => setConfirm(false)}>{tr("Keep my changes")}</button></>
+                  : <button className="btn ghost danger" onClick={() => setConfirm(true)}>{tr("Reset the example data")}</button>}
               </div>
             </div>
           )}

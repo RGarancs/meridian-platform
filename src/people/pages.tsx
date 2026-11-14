@@ -1,3 +1,4 @@
+import { tr, locale } from '../platform/i18n';
 import { useMemo, useState } from 'react';
 import {
   LeaveKind, OrgNode, Person, activePeople, addDays, candidatesToDelete, compaRatio, directReports, docsToAcknowledge, enps, expiringSoon,
@@ -28,29 +29,29 @@ export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPer
   const pulse = [...data.pulses].sort((a, b) => b.period.localeCompare(a.period))[0];
   const score = pulse ? enps(pulse.scores) : null;
   const asks = [
-    pending.length && { n: pending.length, text: plural(pending.length, 'time-off request') + ' to decide', page: 'timeoff', icon: 'calendar' },
-    unsigned && { n: unsigned, text: `${plural(unsigned, 'signature')} missing on documents`, page: 'documents', icon: 'doc' },
-    overdueTasks && { n: overdueTasks, text: `${plural(overdueTasks, 'joiner or leaver task')} overdue`, page: 'moves', icon: 'door' },
-    reviewsWaiting && { n: reviewsWaiting, text: `${plural(reviewsWaiting, 'review')} waiting for a manager`, page: 'reviews', icon: 'star' },
-    expiring.length && { n: expiring.length, text: `${plural(expiring.length, 'certificate or course', 'certificates or courses')} expiring`, page: 'skills', icon: 'skill' },
-    toDelete && { n: toDelete, text: `${plural(toDelete, 'candidate')} past the GDPR keep date`, page: 'hiring', icon: 'hire' },
+    pending.length && { n: pending.length, text: tr('{0} to decide', { 0: plural(pending.length, 'time-off request') }), page: 'timeoff', icon: 'calendar' },
+    unsigned && { n: unsigned, text: tr("{0} missing on documents", { 0: plural(unsigned, 'signature') }), page: 'documents', icon: 'doc' },
+    overdueTasks && { n: overdueTasks, text: tr("{0} overdue", { 0: plural(overdueTasks, 'joiner or leaver task') }), page: 'moves', icon: 'door' },
+    reviewsWaiting && { n: reviewsWaiting, text: tr("{0} waiting for a manager", { 0: plural(reviewsWaiting, 'review') }), page: 'reviews', icon: 'star' },
+    expiring.length && { n: expiring.length, text: tr("{0} expiring", { 0: plural(expiring.length, 'certificate or course', 'certificates or courses') }), page: 'skills', icon: 'skill' },
+    toDelete && { n: toDelete, text: tr("{0} past the GDPR keep date", { 0: plural(toDelete, 'candidate') }), page: 'hiring', icon: 'hire' },
   ].filter(Boolean) as { n: number; text: string; page: string; icon: string }[];
 
   return (
     <div className="page">
-      <Head eyebrow="People" title={asks.length === 0 ? 'Nothing needs you today.' : `${plural(asks.length, 'thing')} need${asks.length === 1 ? 's' : ''} you today.`} />
+      <Head eyebrow={tr("People")} title={asks.length === 0 ? tr("Nothing needs you today.") : tr("{0} need{1} you today.", { 0: plural(asks.length, 'thing'), 1: asks.length === 1 ? 's' : '' })} />
       <div className="hero">
-        <div><div className="sub">Team</div><div className="big">{active.length}</div><div className="sub" style={{ marginTop: 6 }}>{plural(away.length, 'person', 'people')} away today</div></div>
+        <div><div className="sub">{tr("Team")}</div><div className="big">{active.length}</div><div className="sub" style={{ marginTop: 6 }}>{plural(away.length, 'person', 'people')} {tr("away today")}</div></div>
         <div>
-          <div className="sub" data-tip="Employee Net Promoter Score: % who would recommend working here (9–10) minus % who would not (0–6). Hidden below 5 answers." tabIndex={0}>eNPS</div>
+          <div className="sub" data-tip={tr("Employee Net Promoter Score: % who would recommend working here (9–10) minus % who would not (0–6). Hidden below 5 answers.")} tabIndex={0}>{tr("eNPS")}</div>
           <div className="big" style={{ color: 'var(--accent)' }}>{score === null ? '—' : score > 0 ? `+${score}` : score}</div>
-          <div className="sub" style={{ marginTop: 6 }}>{pulse ? `${pulse.period.replace('-', ' ')} · ${plural(pulse.scores.length, 'answer')}` : 'No pulse yet'}</div>
+          <div className="sub" style={{ marginTop: 6 }}>{pulse ? `${pulse.period.replace('-', ' ')} · ${plural(pulse.scores.length, 'answer')}` : tr("No pulse yet")}</div>
         </div>
       </div>
       <div className="grid">
         <div className="card tight s7">
-          <div className="card-head"><h2>Needs you</h2></div>
-          {asks.length === 0 ? <Empty title="All clear" text="No requests, signatures or reviews are waiting." /> : (
+          <div className="card-head"><h2>{tr("Needs you")}</h2></div>
+          {asks.length === 0 ? <Empty title={tr("All clear")} text={tr("No requests, signatures or reviews are waiting.")} /> : (
             <div className="rows" style={{ marginTop: 8 }}>
               {asks.map((a) => (
                 <div key={a.page} className="row" onClick={() => go(a.page)} role="link" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && go(a.page)}>
@@ -63,13 +64,13 @@ export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPer
           )}
         </div>
         <div className="card tight s5">
-          <div className="card-head"><h2>Away today</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('timeoff')}>Calendar <Icon name="arrow" size={14} /></button></div>
-          {away.length === 0 ? <Empty title="Everyone is in" /> : (
+          <div className="card-head"><h2>{tr("Away today")}</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('timeoff')}>{tr("Calendar")} <Icon name="arrow" size={14} /></button></div>
+          {away.length === 0 ? <Empty title={tr("Everyone is in")} /> : (
             <div className="rows" style={{ marginTop: 8 }}>
               {away.map(({ person, request }) => (
                 <div key={request.id} className="row" onClick={() => onPerson(person.id)}>
                   <Avatar name={person.name} size="sm" />
-                  <div className="grow"><div className="t">{person.name}</div><div className="sub">Back {fmtDay(addDays(request.to, 1))}</div></div>
+                  <div className="grow"><div className="t">{person.name}</div><div className="sub">{tr("Back")} {fmtDay(addDays(request.to, 1))}</div></div>
                   <span className={`pill ${request.kind === 'sick' ? 'neg' : 'accent'}`}>{KIND[request.kind]}</span>
                 </div>
               ))}
@@ -79,26 +80,26 @@ export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPer
       </div>
       <div className="grid">
         <div className="card tight s6">
-          <div className="card-head"><h2>Joining and leaving</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('moves')}>Checklists <Icon name="arrow" size={14} /></button></div>
-          {starting.length + leaving.length === 0 ? <Empty title="No one joining or leaving soon" /> : (
+          <div className="card-head"><h2>{tr("Joining and leaving")}</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('moves')}>{tr("Checklists")} <Icon name="arrow" size={14} /></button></div>
+          {starting.length + leaving.length === 0 ? <Empty title={tr("No one joining or leaving soon")} /> : (
             <div className="rows" style={{ marginTop: 8 }}>
               {starting.map((p) => (
                 <div key={p.id} className="row" onClick={() => onPerson(p.id)}>
                   <Avatar name={p.name} size="sm" /><div className="grow"><div className="t">{p.name}</div><div className="sub">{p.title} · {p.team}</div></div>
-                  <span className="pill pos">Starts {fmtDay(p.startDate)}</span>
+                  <span className="pill pos">{tr("Starts")} {fmtDay(p.startDate)}</span>
                 </div>
               ))}
               {leaving.map((p) => (
                 <div key={p.id} className="row" onClick={() => onPerson(p.id)}>
                   <Avatar name={p.name} size="sm" /><div className="grow"><div className="t">{p.name}</div><div className="sub">{p.title} · {p.team}</div></div>
-                  <span className="pill warn">Last day {fmtDay(p.lastDay!)}</span>
+                  <span className="pill warn">{tr("Last day")} {fmtDay(p.lastDay!)}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
         <div className="card s6">
-          <div className="card-head"><h2>Company goals</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('goals')}>All goals <Icon name="arrow" size={14} /></button></div>
+          <div className="card-head"><h2>{tr("Company goals")}</h2><div className="spacer" /><button className="btn sm ghost" onClick={() => go('goals')}>{tr("All goals")} <Icon name="arrow" size={14} /></button></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {data.goals.filter((g) => g.level === 'company').map((g) => {
               const p = goalProgress(data, g.id);
@@ -128,7 +129,7 @@ export function Directory({ hr, onPerson }: { hr: People; onPerson: (id: string)
   const teams = [...new Set(data.people.map((p) => p.team))].sort();
   const shown = data.people.filter((p) => (team === 'all' || p.team === team) && (!q || `${p.name} ${p.title} ${p.team} ${p.location}`.toLowerCase().includes(q.toLowerCase())));
   const away = new Set(whoIsAway(data, t).map((a) => a.person.id));
-  const status = (p: Person) => (p.startDate > t ? <span className="pill pos">Starts {fmtDay(p.startDate)}</span> : p.lastDay && p.lastDay < t ? <span className="pill">Left</span> : p.lastDay ? <span className="pill warn">Leaving {fmtDay(p.lastDay)}</span> : away.has(p.id) ? <span className="pill accent">Away</span> : null);
+  const status = (p: Person) => (p.startDate > t ? <span className="pill pos">{tr("Starts")} {fmtDay(p.startDate)}</span> : p.lastDay && p.lastDay < t ? <span className="pill">{tr("Left")}</span> : p.lastDay ? <span className="pill warn">{tr("Leaving")} {fmtDay(p.lastDay)}</span> : away.has(p.id) ? <span className="pill accent">{tr("Away")}</span> : null);
 
   const Node = ({ n }: { n: OrgNode }) => (
     <div>
@@ -142,22 +143,22 @@ export function Directory({ hr, onPerson }: { hr: People; onPerson: (id: string)
 
   return (
     <div className="page">
-      <Head eyebrow="People" title={`${plural(activePeople(data, t).length, 'person', 'people')} in ${plural(teams.length, 'team')}.`}>
-        <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Add person</button>
+      <Head eyebrow={tr("People")} title={tr("{0} in {1}.", { 0: plural(activePeople(data, t).length, 'person', 'people'), 1: plural(teams.length, 'team') })}>
+        <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />{tr("Add person")}</button>
       </Head>
       <div className="toolbar">
-        <SearchInput id="dir-q" value={q} onChange={setQ} placeholder="Find by name, role, team or city" />
-        <select className="input" style={{ width: 'auto' }} value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team"><option value="all">All teams</option>{teams.map((x) => <option key={x}>{x}</option>)}</select>
+        <SearchInput id="dir-q" value={q} onChange={setQ} placeholder={tr("Find by name, role, team or city")} />
+        <select className="input" style={{ width: 'auto' }} value={team} onChange={(e) => setTeam(e.target.value)} aria-label={tr("Team")}><option value="all">{tr("All teams")}</option>{teams.map((x) => <option key={x}>{x}</option>)}</select>
         <div className="spacer" />
-        <Seg label="View" value={view} onChange={setView} options={[{ id: 'list', label: 'List' }, { id: 'org', label: 'Org chart' }]} />
+        <Seg label={tr("View")} value={view} onChange={setView} options={[{ id: 'list', label: tr("List") }, { id: 'org', label: tr("Org chart") }]} />
       </div>
       {view === 'org' ? (
         <div className="card"><div className="org">{orgTree(data, t).map((n) => <Node key={n.person.id} n={n} />)}</div></div>
       ) : (
         <div className="card tight">
-          {shown.length === 0 ? <Empty title="No one matches" text="Try another name or team." /> : (
+          {shown.length === 0 ? <Empty title={tr("No one matches")} text={tr("Try another name or team.")} /> : (
             <div style={{ overflowX: 'auto' }}><table className="list click">
-              <thead><tr><th>Name</th><th>Role</th><th>Team</th><th>Manager</th><th>Started</th><th /></tr></thead>
+              <thead><tr><th>{tr("Name")}</th><th>{tr("Role")}</th><th>{tr("Team")}</th><th>{tr("Manager")}</th><th>{tr("Started")}</th><th /></tr></thead>
               <tbody>{shown.map((p) => (
                 <tr key={p.id} onClick={() => onPerson(p.id)}>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Avatar name={p.name} size="sm" /><div><div className="ink">{p.name}</div><div className="sub">{p.location}</div></div></div></td>
@@ -186,31 +187,31 @@ export function PersonForm({ hr, person, onClose }: { hr: People; person?: Perso
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const errs = [!f.name.trim() && 'Add a name.', !f.title.trim() && 'Add a role.', !f.team.trim() && 'Add a team.', Number(f.leaveAllowance) < 20 && 'Latvian law needs at least 20 working days of paid leave.'].filter(Boolean) as string[];
+    const errs = [!f.name.trim() && tr("Add a name."), !f.title.trim() && tr("Add a role."), !f.team.trim() && tr("Add a team."), Number(f.leaveAllowance) < 20 && 'Latvian law needs at least 20 working days of paid leave.'].filter(Boolean) as string[];
     if (errs.length) return setErr(errs);
     const v = { name: f.name.trim(), email: f.email.trim(), title: f.title.trim(), team: f.team.trim(), managerId: f.managerId || undefined, startDate: f.startDate, location: f.location, leaveAllowance: Number(f.leaveAllowance), salary: f.salary ? Number(f.salary) : undefined, bonusTarget: f.bonusTarget ? Number(f.bonusTarget) / 100 : undefined };
-    if (person) toast(`Saved ${v.name}`, hr.updatePerson(person.id, v));
-    else { const r = hr.addPerson(v); toast(`Added ${v.name}${v.startDate > todayIso() ? ' and started their onboarding checklist' : ''}`, r.undo); }
+    if (person) toast(tr("Saved {0}", { 0: v.name }), hr.updatePerson(person.id, v));
+    else { const r = hr.addPerson(v); toast(tr("Added {0}{1}", { 0: v.name, 1: v.startDate > todayIso() ? ' and started their onboarding checklist' : '' }), r.undo); }
     onClose();
   };
   return (
-    <Panel title={person ? `Edit ${person.name}` : 'Add a person'} onClose={onClose}>
+    <Panel title={person ? tr("Edit {0}", { 0: person.name }) : tr("Add a person")} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {err.length > 0 && <ul className="errors">{err.map((x) => <li key={x}>{x}</li>)}</ul>}
-        <div className="row2"><Field label="Name" id="pf-n"><input id="pf-n" autoFocus value={f.name} onChange={set('name')} /></Field><Field label="Work email" id="pf-e"><input id="pf-e" type="email" value={f.email} onChange={set('email')} /></Field></div>
-        <div className="row2"><Field label="Role" id="pf-t"><input id="pf-t" value={f.title} onChange={set('title')} list="pf-titles" /></Field><Field label="Team" id="pf-tm"><input id="pf-tm" value={f.team} onChange={set('team')} list="pf-teams" /></Field></div>
+        <div className="row2"><Field label={tr("Name")} id="pf-n"><input id="pf-n" autoFocus value={f.name} onChange={set('name')} /></Field><Field label={tr("Work email")} id="pf-e"><input id="pf-e" type="email" value={f.email} onChange={set('email')} /></Field></div>
+        <div className="row2"><Field label={tr("Role")} id="pf-t"><input id="pf-t" value={f.title} onChange={set('title')} list="pf-titles" /></Field><Field label={tr("Team")} id="pf-tm"><input id="pf-tm" value={f.team} onChange={set('team')} list="pf-teams" /></Field></div>
         <datalist id="pf-titles">{[...new Set(data.people.map((p) => p.title))].map((x) => <option key={x} value={x} />)}</datalist>
         <datalist id="pf-teams">{[...new Set(data.people.map((p) => p.team))].map((x) => <option key={x} value={x} />)}</datalist>
-        <div className="row2"><Field label="Manager" id="pf-m"><PersonSelect id="pf-m" people={data.people.filter((p) => p.id !== person?.id)} value={f.managerId} onChange={(v) => setF({ ...f, managerId: v })} none="No manager" /></Field><Field label="Start date" id="pf-s"><input id="pf-s" type="date" value={f.startDate} onChange={set('startDate')} /></Field></div>
-        <div className="row2"><Field label="Location" id="pf-l"><input id="pf-l" value={f.location} onChange={set('location')} /></Field><Field label="Paid leave a year" id="pf-a" tip="Working days. Latvia's minimum is 4 weeks, which is 20 working days."><input id="pf-a" type="number" min="20" value={f.leaveAllowance} onChange={set('leaveAllowance')} /></Field></div>
-        <div className="row2"><Field label="Monthly salary, gross (€)" id="pf-sa" tip="Only HR and the line manager see pay."><input id="pf-sa" type="number" min="0" value={f.salary} onChange={set('salary')} /></Field><Field label="Bonus target (% of year's pay)" id="pf-b" tip="Paid in full when the review score is 4 of 5."><input id="pf-b" type="number" min="0" max="100" value={f.bonusTarget} onChange={set('bonusTarget')} /></Field></div>
-        <div className="toolbar"><button className="btn primary" type="submit">{person ? 'Save' : 'Add person'}</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
+        <div className="row2"><Field label={tr("Manager")} id="pf-m"><PersonSelect id="pf-m" people={data.people.filter((p) => p.id !== person?.id)} value={f.managerId} onChange={(v) => setF({ ...f, managerId: v })} none="No manager" /></Field><Field label={tr("Start date")} id="pf-s"><input id="pf-s" type="date" value={f.startDate} onChange={set('startDate')} /></Field></div>
+        <div className="row2"><Field label={tr("Location")} id="pf-l"><input id="pf-l" value={f.location} onChange={set('location')} /></Field><Field label={tr("Paid leave a year")} id="pf-a" tip={tr("Working days. Latvia's minimum is 4 weeks, which is 20 working days.")}><input id="pf-a" type="number" min="20" value={f.leaveAllowance} onChange={set('leaveAllowance')} /></Field></div>
+        <div className="row2"><Field label={tr("Monthly salary, gross (€)")} id="pf-sa" tip={tr("Only HR and the line manager see pay.")}><input id="pf-sa" type="number" min="0" value={f.salary} onChange={set('salary')} /></Field><Field label={tr("Bonus target (% of year's pay)")} id="pf-b" tip={tr("Paid in full when the review score is 4 of 5.")}><input id="pf-b" type="number" min="0" max="100" value={f.bonusTarget} onChange={set('bonusTarget')} /></Field></div>
+        <div className="toolbar"><button className="btn primary" type="submit">{person ? tr("Save") : tr("Add person")}</button><button className="btn ghost" type="button" onClick={onClose}>{tr("Cancel")}</button></div>
       </form>
     </Panel>
   );
 }
 
-const LEVEL = ['None', 'Learning', 'Can do', 'Expert', 'Teaches'];
+const LEVEL = ['None', 'Learning', tr("Can do"), 'Expert', 'Teaches'];
 
 export function PersonPanel({ hr, id, onClose, onPerson, go }: { hr: People; id: string; onClose: () => void; onPerson: (id: string) => void; go: Go }) {
   const toast = useToast();
@@ -236,48 +237,48 @@ export function PersonPanel({ hr, id, onClose, onPerson, go }: { hr: People; id:
   return (
     <Panel title={p.name} eyebrow={`${p.title} · ${p.team}`} lead={<Avatar name={p.name} size="lg" />} onClose={onClose}
       actions={<Menu items={[
-        { label: 'Edit', icon: 'edit', onClick: () => setEditing(true) },
-        { label: 'Book time off', icon: 'calendar', onClick: () => setTimeOff(true) },
+        { label: tr("Edit"), icon: 'edit', onClick: () => setEditing(true) },
+        { label: tr("Book time off"), icon: 'calendar', onClick: () => setTimeOff(true) },
         'divider',
-        { label: p.lastDay ? 'Change last day' : 'Start leaving', icon: 'door', onClick: () => setLeaving(true), danger: !p.lastDay },
+        { label: p.lastDay ? tr("Change last day") : tr("Start leaving"), icon: 'door', onClick: () => setLeaving(true), danger: !p.lastDay },
       ]} />}>
       <div className="hero" style={{ gap: 28 }}>
-        <div><div className="sub" data-tip="Paid vacation days left this year after taken, booked and pending days." tabIndex={0}>Vacation left</div><div className="big" style={{ fontSize: 40 }}>{bal.left}</div><div className="sub">of {bal.allowance} days</div></div>
-        <div><div className="sub">With us</div><div className="big" style={{ fontSize: 40 }}>{months < 0 ? 'New' : months >= 12 ? `${Math.floor(months / 12)}y ${months % 12}m` : `${months}m`}</div><div className="sub">since {fmtDayYear(p.startDate)}</div></div>
+        <div><div className="sub" data-tip={tr("Paid vacation days left this year after taken, booked and pending days.")} tabIndex={0}>{tr("Vacation left")}</div><div className="big" style={{ fontSize: 40 }}>{bal.left}</div><div className="sub">{tr("of")} {bal.allowance} {tr("days")}</div></div>
+        <div><div className="sub">{tr("With us")}</div><div className="big" style={{ fontSize: 40 }}>{months < 0 ? tr("New") : months >= 12 ? `${Math.floor(months / 12)}y ${months % 12}m` : `${months}m`}</div><div className="sub">{tr("since")} {fmtDayYear(p.startDate)}</div></div>
       </div>
       {leaving && (
         <div className="card flat tight">
-          <form className="inline-form" onSubmit={(e) => { e.preventDefault(); toast(`${p.name} leaves on ${fmtDay(lastDay)}. Leaving checklist started.`, hr.startLeaving(p.id, lastDay)); setLeaving(false); }}>
-            <label htmlFor="pp-ld" className="sub">Last day</label><input id="pp-ld" className="input" type="date" value={lastDay} onChange={(e) => setLastDay(e.target.value)} />
-            <button className="btn primary sm" type="submit">Start leaving</button><button className="btn ghost sm" type="button" onClick={() => setLeaving(false)}>Cancel</button>
+          <form className="inline-form" onSubmit={(e) => { e.preventDefault(); toast(tr("{0} leaves on {1}. Leaving checklist started.", { 0: p.name, 1: fmtDay(lastDay) }), hr.startLeaving(p.id, lastDay)); setLeaving(false); }}>
+            <label htmlFor="pp-ld" className="sub">{tr("Last day")}</label><input id="pp-ld" className="input" type="date" value={lastDay} onChange={(e) => setLastDay(e.target.value)} />
+            <button className="btn primary sm" type="submit">{tr("Start leaving")}</button><button className="btn ghost sm" type="button" onClick={() => setLeaving(false)}>{tr("Cancel")}</button>
           </form>
-          <p className="sub" style={{ margin: '8px 0 0' }}>Vacation owed on that day: <b className="ink">{unusedVacationOnLeaving(data, p.id, lastDay)} days</b>, paid with the final salary.</p>
+          <p className="sub" style={{ margin: '8px 0 0' }}>{tr("Vacation owed on that day:")} <b className="ink">{unusedVacationOnLeaving(data, p.id, lastDay)} {tr("days")}</b>{tr(", paid with the final salary.")}</p>
         </div>
       )}
       <dl className="facts">
-        <dt>Manager</dt><dd>{p.managerId ? <button className="link" onClick={() => onPerson(p.managerId!)}>{nameOf(data, p.managerId)}</button> : '—'}</dd>
-        <dt>Email</dt><dd>{p.email || '—'}</dd>
-        <dt>Location</dt><dd>{p.location}</dd>
-        {p.salary !== undefined && <><dt><span data-tip="Only HR and the line manager see pay." tabIndex={0}>Salary</span></dt><dd>{money(p.salary)} a month{cr !== null && <span className="sub"> · <span data-tip="Salary against the middle of the role's pay band. 1.00 is the middle." tabIndex={0}>compa-ratio {cr.toFixed(2)}</span></span>}</dd></>}
-        {p.lastDay && <><dt>Last day</dt><dd>{fmtDayYear(p.lastDay)}</dd></>}
+        <dt>{tr("Manager")}</dt><dd>{p.managerId ? <button className="link" onClick={() => onPerson(p.managerId!)}>{nameOf(data, p.managerId)}</button> : '—'}</dd>
+        <dt>{tr("Email")}</dt><dd>{p.email || '—'}</dd>
+        <dt>{tr("Location")}</dt><dd>{p.location}</dd>
+        {p.salary !== undefined && <><dt><span data-tip={tr("Only HR and the line manager see pay.")} tabIndex={0}>{tr("Salary")}</span></dt><dd>{money(p.salary)} {tr("a month")}{cr !== null && <span className="sub"> · <span data-tip={tr("Salary against the middle of the role's pay band. 1.00 is the middle.")} tabIndex={0}>{tr("compa-ratio")} {cr.toFixed(2)}</span></span>}</dd></>}
+        {p.lastDay && <><dt>{tr("Last day")}</dt><dd>{fmtDayYear(p.lastDay)}</dd></>}
       </dl>
-      {reports.length > 0 && (<div><div className="section-title">Team ({reports.length})</div><div className="rows">{reports.map((r) => <div key={r.id} className="row" onClick={() => onPerson(r.id)}><Avatar name={r.name} size="sm" /><div className="grow"><div className="t">{r.name}</div><div className="sub">{r.title}</div></div></div>)}</div></div>)}
+      {reports.length > 0 && (<div><div className="section-title">{tr("Team (")}{reports.length})</div><div className="rows">{reports.map((r) => <div key={r.id} className="row" onClick={() => onPerson(r.id)}><Avatar name={r.name} size="sm" /><div className="grow"><div className="t">{r.name}</div><div className="sub">{r.title}</div></div></div>)}</div></div>)}
       {toSign.length > 0 && (
-        <div><div className="section-title">Waiting for signature</div><div className="rows">{toSign.map((d) => (
-          <div key={d.id} className="row" style={{ cursor: 'default' }}><Icon name="doc" /><div className="grow"><div className="t">{d.title}</div><div className="sub">Version {d.version}</div></div><button className="btn sm" onClick={() => toast(`${p.name} signed ${d.title}`, hr.acknowledge(d.id, p.id))}>Mark signed</button></div>
+        <div><div className="section-title">{tr("Waiting for signature")}</div><div className="rows">{toSign.map((d) => (
+          <div key={d.id} className="row" style={{ cursor: 'default' }}><Icon name="doc" /><div className="grow"><div className="t">{d.title}</div><div className="sub">{tr("Version")} {d.version}</div></div><button className="btn sm" onClick={() => toast(tr("{0} signed {1}", { 0: p.name, 1: d.title }), hr.acknowledge(d.id, p.id))}>{tr("Mark signed")}</button></div>
         ))}</div></div>
       )}
       {goals.length > 0 && (
-        <div><div className="section-title">Goals</div><div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{goals.map((g) => (
+        <div><div className="section-title">{tr("Goals")}</div><div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{goals.map((g) => (
           <div key={g.id} role="link" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => { onClose(); go('goals'); }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 6 }}><span className="ink">{g.title}</span><b className="num ink">{goalProgress(data, g.id)}%</b></div>
             <Bar value={goalProgress(data, g.id)} tone={g.status === 'off_track' ? 'neg' : g.status === 'at_risk' ? 'warn' : ''} />
           </div>
         ))}</div></div>
       )}
-      {review && (<div><div className="section-title">Review · {review.cycle}</div><div className="rows"><div className="row" onClick={() => { onClose(); go('reviews'); }}><Icon name="star" /><div className="grow"><div className="t">{review.managerDone ? `Score ${reviewScore(review) ?? '—'} of 5` : review.selfDone ? 'Waiting for the manager' : 'Waiting for the self-review'}</div><div className="sub">{plural(review.goals.length, 'goal')}</div></div><Icon name="arrow" size={16} /></div></div></div>)}
-      {gaps.length > 0 && (<div><div className="section-title">Skills to grow for the role</div><div className="rows">{gaps.map((g) => <div key={g.skill.id} className="row" style={{ cursor: 'default' }}><div className="grow"><div className="t">{g.skill.name}</div><div className="sub">Has {LEVEL[g.have]}, role needs {LEVEL[g.need]}</div></div><span className="pill warn">Gap {g.gap}</span></div>)}</div></div>)}
-      {feedback.length > 0 && (<div><div className="section-title">Recent feedback</div><ul className="tl">{feedback.map((f) => <li key={f.id} className={f.kind === 'praise' ? 'stage_change' : ''}><div className="ink">{f.text}</div><div className="when">{f.kind === 'praise' ? 'Praise' : 'To grow'} · {f.from} · {fmtDay(f.at)}{f.private ? ' · private' : ''}</div></li>)}</ul></div>)}
+      {review && (<div><div className="section-title">{tr("Review ·")} {review.cycle}</div><div className="rows"><div className="row" onClick={() => { onClose(); go('reviews'); }}><Icon name="star" /><div className="grow"><div className="t">{review.managerDone ? tr("Score {0} of 5", { 0: reviewScore(review) ?? '—' }) : review.selfDone ? tr("Waiting for the manager") : tr("Waiting for the self-review")}</div><div className="sub">{plural(review.goals.length, 'goal')}</div></div><Icon name="arrow" size={16} /></div></div></div>)}
+      {gaps.length > 0 && (<div><div className="section-title">{tr("Skills to grow for the role")}</div><div className="rows">{gaps.map((g) => <div key={g.skill.id} className="row" style={{ cursor: 'default' }}><div className="grow"><div className="t">{g.skill.name}</div><div className="sub">{tr("Has")} {LEVEL[g.have]}{tr(", role needs")} {LEVEL[g.need]}</div></div><span className="pill warn">{tr("Gap")} {g.gap}</span></div>)}</div></div>)}
+      {feedback.length > 0 && (<div><div className="section-title">{tr("Recent feedback")}</div><ul className="tl">{feedback.map((f) => <li key={f.id} className={f.kind === 'praise' ? 'stage_change' : ''}><div className="ink">{f.text}</div><div className="when">{f.kind === 'praise' ? tr("Praise") : tr("To grow")} · {f.from} · {fmtDay(f.at)}{f.private ? tr(" · private") : ''}</div></li>)}</ul></div>)}
       {editing && <PersonForm hr={hr} person={p} onClose={() => setEditing(false)} />}
       {timeOff && <LeaveForm hr={hr} personId={p.id} onClose={() => setTimeOff(false)} />}
     </Panel>
@@ -299,28 +300,28 @@ export function LeaveForm({ hr, personId, onClose }: { hr: People; personId?: st
   const submit = (e: React.FormEvent) => {
     e.preventDefault(); setTried(true);
     if (errs.length) return;
-    toast(`Asked for ${plural(days, 'day')} off for ${nameOf(data, f.personId)}`, hr.requestLeave({ personId: f.personId, kind: f.kind, from: f.from, to: f.to, note: f.note || undefined }));
+    toast(tr("Asked for {0} off for {1}", { 0: plural(days, 'day'), 1: nameOf(data, f.personId) }), hr.requestLeave({ personId: f.personId, kind: f.kind, from: f.from, to: f.to, note: f.note || undefined }));
     onClose();
   };
   return (
-    <Panel title="Book time off" onClose={onClose}>
+    <Panel title={tr("Book time off")} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {tried && errs.length > 0 && <ul className="errors">{errs.map((x) => <li key={x}>{x}</li>)}</ul>}
         <div className="row2">
-          <Field label="Who" id="lf-p"><PersonSelect id="lf-p" people={activePeople(data, t)} value={f.personId} onChange={(v) => setF({ ...f, personId: v })} /></Field>
-          <Field label="Kind" id="lf-k"><select id="lf-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as LeaveKind })}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+          <Field label={tr("Who")} id="lf-p"><PersonSelect id="lf-p" people={activePeople(data, t)} value={f.personId} onChange={(v) => setF({ ...f, personId: v })} /></Field>
+          <Field label={tr("Kind")} id="lf-k"><select id="lf-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as LeaveKind })}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
         </div>
         <div className="row2">
-          <Field label="First day" id="lf-f"><input id="lf-f" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: e.target.value > f.to ? e.target.value : f.to })} /></Field>
-          <Field label="Last day" id="lf-t"><input id="lf-t" type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} /></Field>
+          <Field label={tr("First day")} id="lf-f"><input id="lf-f" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value, to: e.target.value > f.to ? e.target.value : f.to })} /></Field>
+          <Field label={tr("Last day")} id="lf-t"><input id="lf-t" type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} /></Field>
         </div>
-        <Field label="Note (optional)" id="lf-n"><input id="lf-n" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+        <Field label={tr("Note (optional)")} id="lf-n"><input id="lf-n" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
         <div className="card flat tight" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          <div><div className="sub" data-tip="Monday to Friday, without Latvian public holidays." tabIndex={0}>Working days</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{days}</div></div>
-          {f.kind === 'vacation' && bal && <div><div className="sub">Left after this</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{bal.left - days}</div></div>}
-          {clashes.length > 0 && <div className="grow"><div className="sub">Also away from {data.people.find((x) => x.id === f.personId)?.team}</div><div className="ink">{clashes.map((c) => c.name).join(', ')}</div></div>}
+          <div><div className="sub" data-tip={tr("Monday to Friday, without Latvian public holidays.")} tabIndex={0}>{tr("Working days")}</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{days}</div></div>
+          {f.kind === 'vacation' && bal && <div><div className="sub">{tr("Left after this")}</div><div className="ink" style={{ fontSize: 22, fontWeight: 600 }}>{bal.left - days}</div></div>}
+          {clashes.length > 0 && <div className="grow"><div className="sub">{tr("Also away from")} {data.people.find((x) => x.id === f.personId)?.team}</div><div className="ink">{clashes.map((c) => c.name).join(', ')}</div></div>}
         </div>
-        <div className="toolbar"><button className="btn primary" type="submit">Send request</button><button className="btn ghost" type="button" onClick={onClose}>Cancel</button></div>
+        <div className="toolbar"><button className="btn primary" type="submit">{tr("Send request")}</button><button className="btn ghost" type="button" onClick={onClose}>{tr("Cancel")}</button></div>
       </form>
     </Panel>
   );
@@ -341,8 +342,8 @@ export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) =
 
   return (
     <div className="page">
-      <Head eyebrow="People" title={pending.length ? `${plural(pending.length, 'request')} wait${pending.length === 1 ? 's' : ''} for you.` : 'No requests to decide.'}>
-        <button className="btn primary" onClick={() => setBooking(true)}><Icon name="plus" size={16} />Book time off</button>
+      <Head eyebrow={tr("People")} title={pending.length ? tr("{0} wait{1} for you.", { 0: plural(pending.length, 'request'), 1: pending.length === 1 ? 's' : '' }) : tr("No requests to decide.")}>
+        <button className="btn primary" onClick={() => setBooking(true)}><Icon name="plus" size={16} />{tr("Book time off")}</button>
       </Head>
       {pending.length > 0 && (
         <div className="card tight">
@@ -356,11 +357,11 @@ export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) =
                 <Avatar name={p.name} size="sm" />
                 <div className="grow" style={{ minWidth: 200 }}>
                   <div className="t"><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button> · {KIND[r.kind]} · {range(r.from, r.to)}</div>
-                  <div className="sub">{plural(n, 'working day')}{b ? ` · ${b.left + b.pending - n} left after` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                  <div className="sub">{plural(n, 'working day')}{b ? tr(" · {0} left after", { 0: b.left + b.pending - n }) : ''}{r.note ? ` · ${r.note}` : ''}</div>
                 </div>
-                {clash.length > 0 && <span className="pill warn" data-tip={`Also away: ${clash.map((c) => c.name).join(', ')}`} tabIndex={0}>{plural(clash.length, 'clash', 'clashes')}</span>}
-                <button className="btn sm ghost" onClick={() => toast(`Declined ${p.name}'s request`, hr.decideLeave(r.id, 'declined'))}>Decline</button>
-                <button className="btn sm primary" onClick={() => toast(`Approved ${p.name}'s ${KIND[r.kind].toLowerCase()}`, hr.decideLeave(r.id, 'approved'))}><Icon name="check" size={14} />Approve</button>
+                {clash.length > 0 && <span className="pill warn" data-tip={tr("Also away: {0}", { 0: clash.map((c) => c.name).join(', ') })} tabIndex={0}>{plural(clash.length, 'clash', 'clashes')}</span>}
+                <button className="btn sm ghost" onClick={() => toast(tr("Declined {0}'s request", { 0: p.name }), hr.decideLeave(r.id, 'declined'))}>{tr("Decline")}</button>
+                <button className="btn sm primary" onClick={() => toast(tr("Approved {0}'s {1}", { 0: p.name, 1: KIND[r.kind].toLowerCase() }), hr.decideLeave(r.id, 'approved'))}><Icon name="check" size={14} />{tr("Approve")}</button>
               </div>
             );
           })}</div>
@@ -368,19 +369,19 @@ export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) =
       )}
       <div className="card">
         <div className="card-head">
-          <h2>{new Date(`${start}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h2>
+          <h2>{new Date(`${start}T00:00:00Z`).toLocaleDateString(locale(), { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h2>
           <div className="spacer" />
           <span className="sub hide-phone" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span><i className="dot" style={{ background: 'var(--accent)' }} /> Vacation</span><span><i className="dot" style={{ background: 'var(--neg)' }} /> Sick</span><span><i className="dot" style={{ background: 'var(--warn)' }} /> Other</span><span><i className="dot" style={{ border: '1.5px dashed var(--accent)' }} /> Waiting</span>
+            <span><i className="dot" style={{ background: 'var(--accent)' }} /> {tr("Vacation")}</span><span><i className="dot" style={{ background: 'var(--neg)' }} /> {tr("Sick")}</span><span><i className="dot" style={{ background: 'var(--warn)' }} /> {tr("Other")}</span><span><i className="dot" style={{ border: '1.5px dashed var(--accent)' }} /> {tr("Waiting")}</span>
           </span>
-          <button className="btn sm icon ghost" aria-label="Earlier" onClick={() => setStart(addDays(start, -14))}><Icon name="chevron" size={16} className="rot90" /></button>
-          <button className="btn sm ghost" onClick={() => { const d = new Date(`${t}T00:00:00Z`); setStart(addDays(t, -((d.getUTCDay() + 6) % 7))); }}>Today</button>
-          <button className="btn sm icon ghost" aria-label="Later" onClick={() => setStart(addDays(start, 14))}><Icon name="chevron" size={16} className="rot-90" /></button>
+          <button className="btn sm icon ghost" aria-label={tr("Earlier")} onClick={() => setStart(addDays(start, -14))}><Icon name="chevron" size={16} className="rot90" /></button>
+          <button className="btn sm ghost" onClick={() => { const d = new Date(`${t}T00:00:00Z`); setStart(addDays(t, -((d.getUTCDay() + 6) % 7))); }}>{tr("Today")}</button>
+          <button className="btn sm icon ghost" aria-label={tr("Later")} onClick={() => setStart(addDays(start, 14))}><Icon name="chevron" size={16} className="rot-90" /></button>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <div className="cal" style={{ ['--days' as string]: days.length }}>
-            <div className="who sub">Person</div>
-            {days.map((d) => { const wd = new Date(`${d}T00:00:00Z`).getUTCDay(); return <div key={d} className={`d ${wd === 0 || wd === 6 || holidays.has(d) ? 'we' : ''} ${d === t ? 'today' : ''}`} title={holidays.has(d) ? 'Public holiday' : undefined}>{Number(d.slice(8))}</div>; })}
+            <div className="who sub">{tr("Person")}</div>
+            {days.map((d) => { const wd = new Date(`${d}T00:00:00Z`).getUTCDay(); return <div key={d} className={`d ${wd === 0 || wd === 6 || holidays.has(d) ? 'we' : ''} ${d === t ? 'today' : ''}`} title={holidays.has(d) ? tr("Public holiday") : undefined}>{Number(d.slice(8))}</div>; })}
             {people.map((p) => (
               <FragmentRow key={p.id}>
                 <div className="who"><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button></div>
@@ -394,9 +395,9 @@ export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) =
         </div>
       </div>
       <div className="card tight">
-        <div className="card-head"><h2>Vacation balances {year}</h2><div className="spacer" /><span className="sub" data-tip="Taken: days already past. Booked: approved future days. Waiting: requests not yet decided." tabIndex={0}>How we count</span></div>
+        <div className="card-head"><h2>{tr("Vacation balances")} {year}</h2><div className="spacer" /><span className="sub" data-tip={tr("Taken: days already past. Booked: approved future days. Waiting: requests not yet decided.")} tabIndex={0}>{tr("How we count")}</span></div>
         <div style={{ overflowX: 'auto' }}><table className="list click">
-          <thead><tr><th>Person</th><th className="num">Allowance</th><th className="num">Taken</th><th className="num">Booked</th><th className="num">Waiting</th><th className="num">Left</th><th style={{ width: 160 }} /></tr></thead>
+          <thead><tr><th>{tr("Person")}</th><th className="num">{tr("Allowance")}</th><th className="num">{tr("Taken")}</th><th className="num">{tr("Booked")}</th><th className="num">{tr("Waiting")}</th><th className="num">{tr("Left")}</th><th style={{ width: 160 }} /></tr></thead>
           <tbody>{activePeople(data, t).map((p) => { const b = leaveBalance(data, p.id, year, t); return (
             <tr key={p.id} onClick={() => onPerson(p.id)}>
               <td className="ink">{p.name}</td><td className="num">{b.allowance}</td><td className="num">{b.taken}</td><td className="num">{b.booked}</td><td className="num">{b.pending}</td>
@@ -404,7 +405,7 @@ export function TimeOff({ hr, onPerson }: { hr: People; onPerson: (id: string) =
             </tr>
           ); })}</tbody>
         </table></div>
-        <p className="sub" style={{ margin: '10px 4px 0' }}>Amber bar: more than 60% of the year's vacation still unused late in the year.</p>
+        <p className="sub" style={{ margin: '10px 4px 0' }}>{tr("Amber bar: more than 60% of the year's vacation still unused late in the year.")}</p>
       </div>
       {booking && <LeaveForm hr={hr} onClose={() => setBooking(false)} />}
     </div>
@@ -426,9 +427,9 @@ export function Moves({ hr, onPerson }: { hr: People; onPerson: (id: string) => 
   ].filter(({ o }) => onboardingProgress(o, t).done < o.tasks.length || o.startDate >= addDays(t, -14));
   return (
     <div className="page">
-      <Head eyebrow="People" title={lists.length ? `${plural(lists.length, 'checklist')} in progress.` : 'No one joining or leaving.'} lede="Each step has an owner and a day relative to the start or last day. Add a person with a future start date and their checklist starts by itself." />
-      <div className="toolbar"><Seg label="Owner" value={owner} onChange={setOwner} options={[{ id: 'all', label: 'Everyone' }, { id: 'hr', label: 'HR' }, { id: 'manager', label: 'Manager' }, { id: 'it', label: 'IT' }, { id: 'newcomer', label: 'Newcomer' }]} /></div>
-      {lists.length === 0 && <div className="card"><Empty title="Nothing in progress" text="Start a leaving checklist from a person's ⋯ menu." /></div>}
+      <Head eyebrow={tr("People")} title={lists.length ? tr("{0} in progress.", { 0: plural(lists.length, 'checklist') }) : tr("No one joining or leaving.")} lede={tr("Each step has an owner and a day relative to the start or last day. Add a person with a future start date and their checklist starts by itself.")} />
+      <div className="toolbar"><Seg label={tr("Owner")} value={owner} onChange={setOwner} options={[{ id: 'all', label: tr("Everyone") }, { id: 'hr', label: tr("HR") }, { id: 'manager', label: tr("Manager") }, { id: 'it', label: tr("IT") }, { id: 'newcomer', label: tr("Newcomer") }]} /></div>
+      {lists.length === 0 && <div className="card"><Empty title={tr("Nothing in progress")} text={tr("Start a leaving checklist from a person's ⋯ menu.")} /></div>}
       <div className="grid">
         {lists.map(({ o, kind }) => {
           const p = data.people.find((x) => x.id === o.personId);
@@ -439,19 +440,19 @@ export function Moves({ hr, onPerson }: { hr: People; onPerson: (id: string) => 
             <div key={o.id} className="card s6">
               <div className="card-head">
                 <Avatar name={p.name} />
-                <div className="grow"><h2 style={{ fontSize: 16 }}><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button></h2><div className="sub">{kind === 'onboarding' ? `Starts ${fmtDay(o.startDate)}` : `Last day ${fmtDay(o.startDate)}`} · {p.title}</div></div>
+                <div className="grow"><h2 style={{ fontSize: 16 }}><button className="link" onClick={() => onPerson(p.id)}>{p.name}</button></h2><div className="sub">{kind === 'onboarding' ? tr("Starts {0}", { 0: fmtDay(o.startDate) }) : tr("Last day {0}", { 0: fmtDay(o.startDate) })} · {p.title}</div></div>
                 <div className="ring" style={{ ['--p' as string]: Math.round((pr.done / pr.total) * 100) }} data-v={`${pr.done}/${pr.total}`} />
               </div>
-              {owed !== null && <p className="sub" style={{ margin: '0 0 8px' }}>Unused vacation to pay out: <b className="ink">{owed} days</b></p>}
+              {owed !== null && <p className="sub" style={{ margin: '0 0 8px' }}>{tr("Unused vacation to pay out:")} <b className="ink">{owed} {tr("days")}</b></p>}
               <div className="rows">
                 {o.tasks.filter((x) => owner === 'all' || x.owner === owner).map((task) => {
                   const due = addDays(o.startDate, task.dueDay);
                   const late = !task.done && due < t;
                   return (
                     <label key={task.id} className="row" style={{ cursor: 'pointer' }}>
-                      <input type="checkbox" checked={task.done} onChange={() => toast(task.done ? 'Reopened' : 'Done', hr.toggleTask(kind, o.id, task.id))} />
+                      <input type="checkbox" checked={task.done} onChange={() => toast(task.done ? tr("Reopened") : tr("Done"), hr.toggleTask(kind, o.id, task.id))} />
                       <div className="grow"><div className="t" style={task.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{task.text}</div><div className="sub">{OWNER[task.owner]} · {fmtDay(due)}</div></div>
-                      {late && <span className="pill neg">Late</span>}
+                      {late && <span className="pill neg">{tr("Late")}</span>}
                     </label>
                   );
                 })}
