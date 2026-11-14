@@ -9,6 +9,7 @@ import { useCrm } from './crm/useCrm';
 import { Companies, Contacts, Deals, Reports, SalesToday, TasksPage } from './crm/pages';
 import { Autopilot, Customers, Newsletters, Service } from './crm/ai-pages';
 import { PropertySettings } from './crm/props';
+import { Plans } from './platform/Plans';
 import { slaState, suggestions } from './crm/ai';
 import { RecordPanel } from './crm/RecordPanel';
 import { usePeople } from './people/usePeople';
@@ -39,7 +40,7 @@ const GROUPS = [
   { id: 'people', label: tr("People"), icon: 'people', key: 'p', pages: PEOPLE },
 ];
 const SETTINGS = [
-  { id: 'brand', label: tr("Brand"), icon: 'sparkle' }, { id: 'properties', label: tr("Customer properties"), icon: 'grid' },
+  { id: 'brand', label: tr("Brand"), icon: 'sparkle' }, { id: 'properties', label: tr("Customer properties"), icon: 'grid' }, { id: 'plans', label: tr('Plans and pricing'), icon: 'coin' },
   { id: 'language', label: tr("Language and region"), icon: 'grid' }, { id: 'shortcuts', label: tr("Keyboard shortcuts"), icon: 'settings' }, { id: 'log', label: tr("Activity log"), icon: 'doc' }, { id: 'data', label: tr("Demo data"), icon: 'trash' },
 ];
 
@@ -295,9 +296,9 @@ function Settings({ section, go, brand, setBrand, crm, audit, onReset }: { secti
       <div className="split">
         <nav className="subnav" aria-label={tr("Settings sections")}>
           <div className="sub-label">{tr("Workspace")}</div>
-          {SETTINGS.slice(0, 2).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
+          {SETTINGS.slice(0, 3).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
           <div className="sub-label">{tr("You")}</div>
-          {SETTINGS.slice(2).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
+          {SETTINGS.slice(3).map((s) => <button key={s.id} aria-current={s.id === cur.id} onClick={() => go(s.id)}><Icon name={s.icon} size={16} />{s.label}</button>)}
         </nav>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           {cur.id === 'brand' && (
@@ -327,6 +328,7 @@ function Settings({ section, go, brand, setBrand, crm, audit, onReset }: { secti
             </div>
           )}
           {cur.id === 'properties' && <PropertySettings crm={crm} />}
+          {cur.id === 'plans' && <Plans />}
           {cur.id === 'language' && (
             <div className="card">
               <div className="form">
