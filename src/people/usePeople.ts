@@ -1,14 +1,27 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Candidate, CandidateStage, DocKind, Feedback, Goal, GoalLevel, HrDocument, LeaveRequest, Opening, PeopleData, Person, ReviewGoal,
-  activePeople, checkIn, moveCandidate, periodShare, publishNewVersion, startOffboarding, startOnboarding,
+  activePeople, checkIn, moveCandidate, periodShare, publishNewVersion, startOffboarding,
 } from './domain';
 import { loadJson, saveJson } from '../platform/jsonStore';
+import { HrQuestion, JourneyStep, KitStatus, advanceKit, askHr, buildJourney, draftKitRequests, pickTemplate, suggestBuddy } from './plus';
 import { seedPeople } from './seed';
 
 let seq = 0;
 const nid = (p: string) => `${p}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** People+: a new joiner gets their role kit requested and a journey built, with a suggested buddy. */
+function withJourney(d: PeopleData, person: Person, templateId?: string, buddyId?: string): PeopleData {
+  const at = today();
+  const kit = draftKitRequests(d, person, at, () => nid('kr'), 'Kit agent');
+  const next = { ...d, kitRequests: [...d.kitRequests, ...kit] };
+  const template = next.journeyTemplates.find((t) => t.id === templateId) ?? pickTemplate(next.journeyTemplates, person);
+  if (!template) return next;
+  const buddy = buddyId ?? suggestBuddy(next, person, at)?.id;
+  const journey = buildJourney(next, person, template, nid('jr'), buddy);
+  return { ...next, journeys: [...next.journeys.filter((j) => j.personId !== person.id), journey] };
+}
 
 /**
  * All People writes go through here. Every change is saved and returns an undo function
@@ -35,8 +48,8 @@ export function usePeople(user: string) {
       // people
       addPerson(p: Omit<Person, 'id'>) {
         const person: Person = { ...p, id: nid('p') };
-        const onb = p.startDate > today() ? [startOnboarding(person.id, p.startDate, nid('ob'))] : [];
-        return { person, undo: commit({ ...d, people: [...d.people, person], onboarding: [...d.onboarding, ...onb] }) };
+        const next = { ...d, people: [...d.people, person] };
+        return { person, undo: commit(p.startDate > today() ? withJourney(next, person) : next) };
       },
       updatePerson(id: string, patch: Partial<Person>) { return commit({ ...d, people: d.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) }); },
       startLeaving(personId: string, lastDay: string) {
@@ -74,13 +87,12 @@ export function usePeople(user: string) {
         const person: Person = { id: nid('p'), name: c.name, email: c.email ?? '', title: op.title, team: op.team, managerId: op.hiringManagerId, startDate, location: 'Riga', leaveAllowance: 20, salary, bonusTarget: 0.05 };
         return {
           person,
-          undo: commit({
+          undo: commit(withJourney({
             ...d,
             people: [...d.people, person],
             candidates: d.candidates.map((x) => (x.id === candidateId ? { ...x, stage: 'hired' } : x)),
             openings: d.openings.map((o) => (o.id === op.id ? { ...o, open: false } : o)),
-            onboarding: [...d.onboarding, startOnboarding(person.id, startDate, nid('ob'))],
-          }),
+          }, person)),
         };
       },
 
@@ -122,6 +134,38 @@ export function usePeople(user: string) {
 
       // pay
       setBand(title: string, min: number, max: number) { return commit({ ...d, bands: [...d.bands.filter((b) => b.title !== title), { title, min, max }] }); },
+
+      // People+: journeys
+      startJourney(personId: string, templateId?: string, buddyId?: string) {
+        const person = d.people.find((p) => p.id === personId)!;
+        return commit(withJourney(d, person, templateId, buddyId));
+      },
+      toggleStep(journeyId: string, stepId: string) {
+        const at = today();
+        return mapIn('journeys', journeyId, (j) => ({ ...j, steps: j.steps.map((s) => (s.id === stepId ? (s.done ? { ...s, done: false, doneAt: undefined, doneBy: undefined } : { ...s, done: true, doneAt: at, doneBy: user }) : s)) }));
+      },
+      addStep(journeyId: string, step: Omit<JourneyStep, 'id' | 'done'>) {
+        return mapIn('journeys', journeyId, (j) => ({ ...j, steps: [...j.steps, { ...step, id: nid('js'), done: false }].sort((a, b) => a.day - b.day) }));
+      },
+      setBuddy(journeyId: string, buddyId: string) { return mapIn('journeys', journeyId, (j) => ({ ...j, buddyId: buddyId || undefined })); },
+      deleteJourney(id: string) { return commit({ ...d, journeys: d.journeys.filter((j) => j.id !== id) }); },
+
+      // People+: IT desk
+      moveKit(id: string, to: KitStatus) { return mapIn('kitRequests', id, (r) => advanceKit(r, to, today(), user)); },
+      requestKit(personId: string, itemId: string, neededBy: string) {
+        return commit({ ...d, kitRequests: [...d.kitRequests, { id: nid('kr'), personId, itemId, status: 'requested', neededBy, history: [{ status: 'requested', at: today(), by: user }] }] });
+      },
+      cancelKit(id: string) { return commit({ ...d, kitRequests: d.kitRequests.filter((r) => r.id !== id) }); },
+
+      // People+: Ask HR
+      ask(personId: string, q: string) {
+        const at = today();
+        const question: HrQuestion = { id: nid('hq'), personId, q, at, answer: askHr(d, personId, q, at), status: 'answered' };
+        if (question.answer.kind === 'none') question.status = 'to_hr';
+        return { question, undo: commit({ ...d, hrQuestions: [...d.hrQuestions, question] }) };
+      },
+      rateAnswer(id: string, helpful: boolean) { return mapIn('hrQuestions', id, (q) => ({ ...q, status: helpful ? 'helpful' : 'to_hr' })); },
+      replyHr(id: string, text: string) { return mapIn('hrQuestions', id, (q) => ({ ...q, status: 'closed', hrReply: text, repliedBy: user })); },
 
       // pulse
       answerPulse(period: string, score: number, comment: string) {

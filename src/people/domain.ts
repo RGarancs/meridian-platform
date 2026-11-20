@@ -1,4 +1,5 @@
 import { tr } from '../platform/i18n';
+import type { HrQuestion, Journey, JourneyTemplate, KitItem, KitRequest, RoleKit } from './plus';
 // People (HR) domain: pure rules, unit-tested. Pages only call these.
 // Latvian defaults where a law sets them (4 weeks = 20 working days paid leave), editable per tenant.
 
@@ -91,11 +92,19 @@ export interface PeopleData {
   training: Training[];
   bands: PayBand[];
   pulses: Pulse[];
+  // People+ phase 1 (Onboard), see plus.ts
+  journeyTemplates: JourneyTemplate[];
+  journeys: Journey[];
+  kitItems: KitItem[];
+  roleKits: RoleKit[];
+  kitRequests: KitRequest[];
+  hrQuestions: HrQuestion[];
 }
 
 export const emptyPeople = (): PeopleData => ({
   people: [], leave: [], onboarding: [], offboarding: [], openings: [], candidates: [], reviews: [], documents: [], goals: [],
   feedback: [], skills: [], skillLevels: [], roleSkills: [], training: [], bands: [], pulses: [],
+  journeyTemplates: [], journeys: [], kitItems: [], roleKits: [], kitRequests: [], hrQuestions: [],
 });
 
 // ---------- dates ----------

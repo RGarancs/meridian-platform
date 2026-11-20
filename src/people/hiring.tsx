@@ -118,7 +118,7 @@ function CandidatePanel({ hr, id, onClose }: { hr: People; id: string; onClose: 
             <div className="card flat tight">
               <div className="section-title">{tr("Hire")} {c.name}</div>
               <div className="row2"><Field label={tr("Start date")} id="cp-s"><input id="cp-s" className="input" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field><Field label={tr("Monthly salary (€)")} id="cp-sa"><input id="cp-sa" className="input" type="number" value={salary} placeholder={op?.salaryFrom ? String(op.salaryFrom) : ''} onChange={(e) => setSalary(e.target.value)} /></Field></div>
-              <button className="btn primary" style={{ marginTop: 10 }} onClick={() => { const r = hr.hire(c.id, start, salary ? Number(salary) : op?.salaryFrom); toast(tr("Hired {0}. Onboarding checklist started.", { 0: c.name }), r.undo); onClose(); }}><Icon name="check" size={16} />{tr("Hire and start onboarding")}</button>
+              <button className="btn primary" style={{ marginTop: 10 }} onClick={() => { const r = hr.hire(c.id, start, salary ? Number(salary) : op?.salaryFrom); toast(tr("Hired {0}. Their journey and kit requests have started.", { 0: c.name }), r.undo); onClose(); }}><Icon name="check" size={16} />{tr("Hire and start their journey")}</button>
             </div>
           )}
           <div className="card flat tight">

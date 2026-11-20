@@ -15,6 +15,8 @@ import { RecordPanel } from './crm/RecordPanel';
 import { usePeople } from './people/usePeople';
 import { Directory, Moves, PeopleOverview, PersonPanel, TimeOff } from './people/pages';
 import { Hiring } from './people/hiring';
+import { AskHr, ItDesk, Journeys, MyMeridian } from './people/plus-pages';
+import { hrInbox, journeyProgress, kitRisk } from './people/plus';
 import { Bonuses, Documents, Goals, Pay, Pulse, Reviews, Skills } from './people/growth';
 import { Head, Icon, Kbd, Panel, Seg, Tabs, useEscape, todayIso } from './platform/ui';
 
@@ -30,7 +32,12 @@ const SALES: Page[] = [
   { id: 'tasks', label: tr("Tasks"), icon: 'task' }, { id: 'reports', label: tr("Reports"), icon: 'chart' },
 ];
 const PEOPLE: Page[] = [
-  { id: 'overview', label: tr("Overview"), icon: 'today' }, { id: 'directory', label: tr("Directory"), icon: 'people' }, { id: 'timeoff', label: tr("Time off"), icon: 'calendar' },
+  { id: 'overview', label: tr("Overview"), icon: 'today' },
+  { id: 'me', label: tr("My Meridian"), icon: 'home', tip: tr("The employee's own home: this week's tasks, their people, their kit and Ask HR") },
+  { id: 'directory', label: tr("Directory"), icon: 'people' }, { id: 'timeoff', label: tr("Time off"), icon: 'calendar' },
+  { id: 'journeys', label: tr("Journeys"), icon: 'route', tip: tr("Onboarding from the welcome page to the end of probation, every step owned") },
+  { id: 'itdesk', label: tr("IT desk"), icon: 'laptop', tip: tr("Role kits and accounts, requested on hire and collected on leaving") },
+  { id: 'askhr', label: tr("Ask HR"), icon: 'chat', tip: tr("Answers from your own policies, with the source; a person takes the rest") },
   { id: 'documents', label: tr("Documents"), icon: 'doc' }, { id: 'hiring', label: tr("Hiring"), icon: 'hire' }, { id: 'goals', label: tr("Goals"), icon: 'target' },
   { id: 'reviews', label: tr("Reviews"), icon: 'star' }, { id: 'moves', label: tr("Joiners and leavers"), icon: 'door' }, { id: 'bonuses', label: tr("Bonuses"), icon: 'coin' },
   { id: 'skills', label: tr("Skills and training"), icon: 'skill' }, { id: 'pay', label: tr("Pay bands"), icon: 'chart' }, { id: 'pulse', label: tr("Pulse"), icon: 'heart' },
@@ -146,6 +153,9 @@ export default function App() {
     'sales-service': crm.data.tickets.filter((x) => x.status === 'open' && (slaState(x, now).breached || x.priority === 'high')).length,
     'sales-autopilot': suggestions(crm.data, now).length,
     'people-timeoff': hr.data.leave.filter((r) => r.status === 'pending').length,
+    'people-journeys': hr.data.journeys.reduce((s, j) => s + journeyProgress(hr.data, j, t).overdue.length, 0),
+    'people-itdesk': hr.data.kitRequests.filter((r) => kitRisk(hr.data, r, t) !== 'ok').length,
+    'people-askhr': hrInbox(hr.data).length,
   };
   const moduleCount = (id: string) => Object.entries(counts).filter(([k]) => k.startsWith(`${id}-`)).reduce((s, [, v]) => s + v, 0);
   const group = GROUPS.find((g) => g.id === route.module);
@@ -199,6 +209,10 @@ export default function App() {
           {route.module === 'sales' && route.page === 'tasks' && <TasksPage crm={crm} onOpen={openRec} />}
           {route.module === 'sales' && route.page === 'reports' && <Reports crm={crm} />}
           {route.module === 'people' && route.page === 'overview' && <PeopleOverview hr={hr} go={(p) => go('people', p)} onPerson={openPerson} />}
+          {route.module === 'people' && route.page === 'me' && <MyMeridian hr={hr} go={(p) => go('people', p)} onPerson={openPerson} />}
+          {route.module === 'people' && route.page === 'journeys' && <Journeys hr={hr} onPerson={openPerson} />}
+          {route.module === 'people' && route.page === 'itdesk' && <ItDesk hr={hr} onPerson={openPerson} />}
+          {route.module === 'people' && route.page === 'askhr' && <AskHr hr={hr} onPerson={openPerson} />}
           {route.module === 'people' && route.page === 'directory' && <Directory hr={hr} onPerson={openPerson} />}
           {route.module === 'people' && route.page === 'timeoff' && <TimeOff hr={hr} onPerson={openPerson} />}
           {route.module === 'people' && route.page === 'documents' && <Documents hr={hr} onPerson={openPerson} />}
@@ -247,7 +261,7 @@ function Palette({ crm, hr, onClose, onRec, onPerson, go, toggleTheme }: {
       { key: 'theme', group: tr('Do'), label: tr("Switch light or dark"), icon: 'sun', run: toggleTheme },
       { key: 'lang', group: tr('Do'), label: lang() === 'en' ? 'Latviešu valoda' : 'Switch to English', icon: 'grid', run: () => setLang(lang() === 'en' ? 'lv' : 'en') },
     ];
-    if (!s) return [...pages.filter((p) => ['sales-today', 'sales-autopilot', 'sales-service', 'people-overview', 'people-timeoff'].includes(p.key)), ...extra.slice(-2)];
+    if (!s) return [...pages.filter((p) => ['sales-today', 'sales-autopilot', 'sales-service', 'people-overview', 'people-me', 'people-journeys', 'people-timeoff'].includes(p.key)), ...extra.slice(-2)];
     const people = hr.data.people.filter((p) => `${p.name} ${p.title} ${p.team}`.toLowerCase().includes(s)).slice(0, 6)
       .map((p) => ({ key: `p${p.id}`, group: tr('People'), label: p.name, sub: `${p.title} · ${p.team}`, icon: 'contact', run: () => onPerson(p.id) }));
     const recs = search(crm.data, q).slice(0, 8).map((h) => ({ key: `${h.ref.kind}${h.ref.id}`, group: tr('Sales'), label: h.label, sub: h.sub, icon: h.ref.kind === 'deal' ? 'deals' : h.ref.kind === 'company' ? 'company' : 'contact', run: () => onRec(h.ref) }));
