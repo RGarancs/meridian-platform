@@ -6,6 +6,7 @@ import {
   unusedVacationOnLeaving, validateLeave, whoIsAway, workingDays,
 } from './domain';
 import { People } from './usePeople';
+import { hrInbox, journeyProgress, kitRisk, kitToReturn } from './plus';
 import { KIND, OWNER, PersonSelect, money, nameOf, range } from './shared';
 import { Avatar, Bar, Empty, Field, Head, Icon, Menu, Panel, SearchInput, Seg, fmtDay, fmtDayYear, plural, todayIso, useToast } from '../platform/ui';
 
@@ -23,6 +24,9 @@ export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPer
   const overdueTasks = [...data.onboarding, ...data.offboarding].reduce((s, o) => s + onboardingProgress(o, t).overdue, 0);
   const reviewsWaiting = data.reviews.filter((r) => !r.managerDone).length;
   const toDelete = candidatesToDelete(data, t).length;
+  const lateSteps = data.journeys.reduce((s, j) => s + journeyProgress(data, j, t).overdue.length, 0);
+  const kitIssues = data.kitRequests.filter((r) => kitRisk(data, r, t) !== 'ok').length + kitToReturn(data, t).length;
+  const hrAsks = hrInbox(data).length;
   const expiring = expiringSoon(data, t, 45);
   const starting = data.people.filter((p) => p.startDate > t && p.startDate <= addDays(t, 45));
   const leaving = data.people.filter((p) => p.lastDay && p.lastDay >= t && p.lastDay <= addDays(t, 60));
@@ -35,6 +39,9 @@ export function PeopleOverview({ hr, go, onPerson }: { hr: People; go: Go; onPer
     reviewsWaiting && { n: reviewsWaiting, text: tr("{0} waiting for a manager", { 0: plural(reviewsWaiting, 'review') }), page: 'reviews', icon: 'star' },
     expiring.length && { n: expiring.length, text: tr("{0} expiring", { 0: plural(expiring.length, 'certificate or course', 'certificates or courses') }), page: 'skills', icon: 'skill' },
     toDelete && { n: toDelete, text: tr("{0} past the GDPR keep date", { 0: plural(toDelete, 'candidate') }), page: 'hiring', icon: 'hire' },
+    lateSteps && { n: lateSteps, text: tr("{0} late on onboarding journeys", { 0: plural(lateSteps, 'step') }), page: 'journeys', icon: 'route' },
+    kitIssues && { n: kitIssues, text: tr("{0} to sort out at the IT desk", { 0: plural(kitIssues, 'kit item') }), page: 'itdesk', icon: 'laptop' },
+    hrAsks && { n: hrAsks, text: tr("{0} for HR from Ask HR", { 0: plural(hrAsks, 'question') }), page: 'askhr', icon: 'chat' },
   ].filter(Boolean) as { n: number; text: string; page: string; icon: string }[];
 
   return (
@@ -191,7 +198,7 @@ export function PersonForm({ hr, person, onClose }: { hr: People; person?: Perso
     if (errs.length) return setErr(errs);
     const v = { name: f.name.trim(), email: f.email.trim(), title: f.title.trim(), team: f.team.trim(), managerId: f.managerId || undefined, startDate: f.startDate, location: f.location, leaveAllowance: Number(f.leaveAllowance), salary: f.salary ? Number(f.salary) : undefined, bonusTarget: f.bonusTarget ? Number(f.bonusTarget) / 100 : undefined };
     if (person) toast(tr("Saved {0}", { 0: v.name }), hr.updatePerson(person.id, v));
-    else { const r = hr.addPerson(v); toast(tr("Added {0}{1}", { 0: v.name, 1: v.startDate > todayIso() ? ' and started their onboarding checklist' : '' }), r.undo); }
+    else { const r = hr.addPerson(v); toast(tr("Added {0}{1}", { 0: v.name, 1: v.startDate > todayIso() ? tr(' and started their journey') : '' }), r.undo); }
     onClose();
   };
   return (
